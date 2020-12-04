@@ -1,0 +1,42 @@
+Please download the docker image use: 
+
+docker push rg15/deeplung:0.3
+
+after download docker image: 
+
+rg15/deeplung:0.3
+
+One example to run is: 
+
+sudo docker run -u root -v /your/local/INPUTS:/INPUTS/ -v /your/local/OUTPUTS:/OUTPUTS deeplung:0.3 sh run_all.sh
+
+I will share a INPUTS example that can run via vanderbilt box shortly. 
+
+The path: 
+
+the local input path: 
+
+/your/local/INPUTS
+
+The local output path: 
+
+/your/local/OUTPUTS
+
+You can change the local input / output paths as you want. 
+
+In my local input path:
+
+a csv file: "test.csv" includes the scans you want test and the meta data information. 
+
+a fold: "NIfTI" stores the image you want to process. 
+
+The output path will generate: 
+
+a fold: "prep" stores the preprocessed image from the original nifti.
+
+a fold: "bbox" stores the detected lung nodule location. 
+
+a fold: "feat" stores the image feature extreated from nifti. 
+
+a csv file "pred.csv" stores the predicted cancer probability (not calibrated). 
+
