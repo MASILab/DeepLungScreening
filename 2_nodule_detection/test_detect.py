@@ -19,7 +19,7 @@ def f(net,input,inputcoord,outputlist):
     output = net(input,inputcoord)
     outputlist.append(output.data.cpu().numpy())
 
-def test_detect(data_loader, net, get_pbb, save_dir, config,n_gpu = 1):
+def test_detect(data_loader, net, get_pbb, save_dir, config, device, n_gpu = 1):
     start_time = time.time()
     net.eval()
     split_comber = data_loader.dataset.split_comber
@@ -52,8 +52,8 @@ def test_detect(data_loader, net, get_pbb, save_dir, config,n_gpu = 1):
             featurelist = []
 
             for i in range(len(splitlist)-1):
-                input = data[splitlist[i]:splitlist[i+1]]
-                inputcoord = coord[splitlist[i]:splitlist[i+1]]
+                input = data[splitlist[i]:splitlist[i+1]].to(device)
+                inputcoord = coord[splitlist[i]:splitlist[i+1]].to(device)
                 if isfeat:
                     output,feature = net(input,inputcoord)
                     featurelist.append(feature.data.cpu().numpy())

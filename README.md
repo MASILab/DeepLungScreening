@@ -15,7 +15,7 @@ All the steps can be find in run_all.sh. A INPUTS and OUTPUTS example can be fou
 
 ## step 1: image pre-process
 
-> python3 ./1_preprocess/step1_main.py --sess_csv ${SPLIT_CSV} --prep_root ${PREP_ROOT} --ori_root ${ORI_ROOT} 
+`> python3 ./1_preprocess/step1_main.py --sess_csv ${SPLIT_CSV} --prep_root ${PREP_ROOT} --ori_root ${ORI_ROOT} `
 
 ```${SPLIT_CSV}``` is the csv file stores the scan list (and meta data) you want to test. 
 ```${PREP_ROOT}``` is the data folder saves the pre-processed result.

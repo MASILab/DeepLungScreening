@@ -42,9 +42,8 @@ config1, nod_net, loss, get_pbb = nodmodel.get_model()
 checkpoint = torch.load('./2_nodule_detection/detector.ckpt')
 nod_net.load_state_dict(checkpoint['state_dict'])
 
-nod_net = nod_net
-
-nod_net = nod_net
+device = torch.device("cuda:0")
+nod_net = nod_net.to(device)
 
 bbox_result_path = args.bbox_root
 if not os.path.exists(bbox_result_path):
@@ -56,4 +55,4 @@ dataset = DataBowl3Detector(config['testsplit'],config1,phase='test',split_combe
 test_loader = DataLoader(dataset, batch_size = 1,
     shuffle = False, num_workers = 1, pin_memory=False, collate_fn =collate)
 
-test_detect(test_loader, nod_net, get_pbb, bbox_result_path, config1)
+test_detect(test_loader, nod_net, get_pbb, bbox_result_path, config1, device)

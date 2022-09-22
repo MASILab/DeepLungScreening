@@ -16,7 +16,11 @@ parser.add_argument('--save_csv_path', type=str, default='/nfs/masi/gaor2/tmp/ju
 
 args = parser.parse_args()
 
-need_factor = ['with_image', 'with_marker',  'age',  'education',  'bmi',  'phist', 'fhist', 'smo_status', 'quit_time', 'pkyr', 'plco', 'kaggle_cancer']
+need_factor = ['with_image', 'with_marker',  
+'age',  'education',  'bmi',  
+'phist', 'fhist', 
+'smo_status', 'quit_time', 'pkyr', 'plco', 
+'kaggle_cancer']
 
 sess_mark_dict = {}
 
