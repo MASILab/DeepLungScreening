@@ -10,6 +10,7 @@ import warnings
 import nibabel as nib
 import argparse
 import pandas as pd
+from tqdm import tqdm
 
 def process_mask(mask):
     convex_mask = np.copy(mask)
@@ -131,11 +132,13 @@ if __name__ == '__main__':
     parser.add_argument('--ori_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
                         help='the root of original data')
     args = parser.parse_args()
-    
-    sess_splits = pd.read_csv(args.sess_csv)['id'].tolist()
-    
-    for i in range(len(sess_splits)):
+
+    sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
+    sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
+
+    for i in tqdm(range(len(sess_splits))):
         sess_id = sess_splits[i]
-        savenpy(name = sess_id, prep_folder = args.prep_root,
-            data_path = args.ori_root + '/' + sess_id + '.nii.gz')
-        np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+        if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
+            savenpy(name = sess_id, prep_folder = args.prep_root, 
+                data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
+            np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))

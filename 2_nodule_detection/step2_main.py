@@ -34,7 +34,9 @@ parser.add_argument('--prep_root', type=str, default='/nfs/masi/gaor2/tmp/justte
 args = parser.parse_args()
 config['datadir'] = args.prep_root
 
-sess_splits = pd.read_csv(args.sess_csv)['id'].tolist()
+sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
+sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
+
 config['testsplit'] = sess_splits
 
 nodmodel = import_module('net_detector')
