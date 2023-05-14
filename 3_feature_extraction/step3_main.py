@@ -42,7 +42,7 @@ casenet = casenet.to(device) #.cuda()
 
 config2['bboxpath'] = args.bbox_root
 config2['datadir'] = args.prep_root
-config2['feat64_root'] = args.feat_root
+config2['feat_root'] = args.feat_root
 
 def job_split(sess_splits, job, max_job=4):
     n = int(len(sess_splits)/max_job) # size of each job
@@ -79,14 +79,14 @@ def test_casenet(model,testset, device):
         nodulePred,casePred, feat128, feat64 = model(x,coord)
         predlist.append(casePred.data.cpu().numpy())
         #print (out.data.cpu().numpy().shape, out[0].data.cpu().numpy().shape)
-        # fname128 = config2['feat128_root'] + '/' + subj_name[0] + '.npy'
-        fname64 = config2['feat64_root'] + '/' + subj_name[0] + '.npy'
+        fname128 = config2['feat_root'] + '/' + subj_name[0] + '.npy'
+        # fname64 = config2['feat_root'] + '/' + subj_name[0] + '.npy'
 #         if os.path.exists(fname128):
 #             print (fname128, ' existed')
 #         if os.path.exists(fname64):
 #             print (fname64, ' existed')
 #        if 'feat128' in config_submit['save_feat_mode']:
-        np.save(fname64, feat64.data.cpu().numpy())
+        np.save(fname128, feat128.data.cpu().numpy())
 #         if 'feat64' in config_submit['save_feat_mode'] :
 #             np.save(fname64, feat64.data.cpu().numpy())
 

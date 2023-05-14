@@ -116,7 +116,7 @@ def savenpy(name,prep_folder,data_path,use_existing=True):
         print('bug in '+name)
         print(e)
         #raise
-    print(name+' done')
+    # print(name+' done')
 
 if __name__ == '__main__':
     
