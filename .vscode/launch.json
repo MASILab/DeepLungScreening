@@ -11,11 +11,13 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            // "args": [
-            //     "--sess_csv", "/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/vlsp_cohort_prep_v1.csv",
-            //     "--bbox_root", "/home/local/VANDERBILT/litz/data/vlsp/DeepLungScreening/bbox",
-            //     "--prep_root", "/home/local/VANDERBILT/litz/data/vlsp/DeepLungScreening/prep",
-            //     "--feat_root", "/home/local/VANDERBILT/litz/data/vlsp/DeepLungScreening/feat"]
+            "args": [
+                "--sess_csv", "/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/nlst/nlst_train_prep.csv",
+                // "--bbox_root", "/media/litz/Elements/litz/data/nlst/DeepLungScreening/bbox",
+                "--prep_root", "/media/litz/Elements/litz/data/nlst/DeepLungScreening/prep",
+                "--ori_root", "/media/litz/Elements/litz/data/nlst/DeepLungScreening/nifti",
+            ]
+                // "--feat_root", "/home/local/VANDERBILT/litz/data/vlsp/DeepLungScreening/feat"]
         }
     ]
 }

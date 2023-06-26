@@ -5,7 +5,7 @@ PREP_ROOT=${ROOT}/prep
 BBOX_ROOT=${ROOT}/bbox
 FEAT_ROOT=${ROOT}/feat
 PRED_CSV=${ROOT}/pred/nlst_train_pred.csv
-TEST_SET=/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/nlst/nlst_train.csv
+TEST_SET=/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/nlst/nlst_cohort_prep_v4.csv
 
 echo "Run step 1 data preprocessing ..."
 
@@ -31,3 +31,4 @@ echo "Run step 4 co-predicting ... "
 
 echo "all finished "
 
+python3 ./1_preprocess/step1_main.py --sess_csv ./cohorts/nlst/jobs/nlst_train_job1.csv --prep_root /home/local/VANDERBILT/litz/data/nlst_all/DeepLungScreening/prep --ori_root /home/local/VANDERBILT/litz/data/nlst_all/DeepLungScreening/nifti

@@ -38,6 +38,7 @@ sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
 sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
 
 config['testsplit'] = sess_splits
+# config['testsplit'] = ['100529time2001']
 
 nodmodel = import_module('net_detector')
 config1, nod_net, loss, get_pbb = nodmodel.get_model()

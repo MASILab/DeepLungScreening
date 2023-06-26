@@ -28,58 +28,62 @@ def test_detect(data_loader, net, get_pbb, save_dir, config, device, n_gpu = 1):
     #         if (i_name <= 1927):
     #             print (i_name)
     #             continue
-            s = time.time()
-            target = [np.asarray(t, np.float32) for t in target]
-            lbb = target[0]
-            nzhw = nzhw[0]
-            #print (data_loader.dataset.filenames[i_name])
-            #name = data_loader.dataset.filenames[i_name].split('-')[0].split('/')[-1]
             name = data_loader.dataset.filenames[i_name].split('/')[-1]
             print ('---------', name)
             shortname = name.split('_clean')[0]
-            data = data[0][0]
-            coord = coord[0][0]
-            isfeat = False
-            if 'output_feature' in config:
-                if config['output_feature']:
-                    isfeat = True
-            n_per_run = n_gpu
-            print(data.size())
-            splitlist = range(0,len(data)+1,n_gpu)
-            if splitlist[-1]!=len(data):
-                splitlist.append(len(data))
-            outputlist = []
-            featurelist = []
+            if not os.path.exists(os.path.join(save_dir, shortname+'_pbb.npy')):
+                s = time.time()
+                target = [np.asarray(t, np.float32) for t in target]
+                lbb = target[0]
+                nzhw = nzhw[0]
+                #print (data_loader.dataset.filenames[i_name])
+                #name = data_loader.dataset.filenames[i_name].split('-')[0].split('/')[-1]
+                
+                data = data[0][0]
+                coord = coord[0][0]
+                isfeat = False
+                if 'output_feature' in config:
+                    if config['output_feature']:
+                        isfeat = True
+                n_per_run = n_gpu
+                print(data.size())
+                splitlist = range(0,len(data)+1,n_gpu)
+                if splitlist[-1]!=len(data):
+                    splitlist.append(len(data))
+                outputlist = []
+                featurelist = []
 
-            for i in range(len(splitlist)-1):
-                input = data[splitlist[i]:splitlist[i+1]].to(device)
-                inputcoord = coord[splitlist[i]:splitlist[i+1]].to(device)
+                for i in range(len(splitlist)-1):
+                    input = data[splitlist[i]:splitlist[i+1]].to(device)
+                    inputcoord = coord[splitlist[i]:splitlist[i+1]].to(device)
+                    if isfeat:
+                        output,feature = net(input,inputcoord)
+                        featurelist.append(feature.data.cpu().numpy())
+                    else:
+                        #output = net(input,inputcoord)
+                        f(net,input,inputcoord,outputlist)
+                #outputlist.append(out.data.cpu().numpy())
+                output = np.concatenate(outputlist,0)
+
+                output = split_comber.combine(output,nzhw=nzhw)
                 if isfeat:
-                    output,feature = net(input,inputcoord)
-                    featurelist.append(feature.data.cpu().numpy())
-                else:
-                    #output = net(input,inputcoord)
-                    f(net,input,inputcoord,outputlist)
-            #outputlist.append(out.data.cpu().numpy())
-            output = np.concatenate(outputlist,0)
+                    feature = np.concatenate(featurelist,0).transpose([0,2,3,4,1])[:,:,:,:,:,np.newaxis]
+                    feature = split_comber.combine(feature,sidelen)[...,0]
 
-            output = split_comber.combine(output,nzhw=nzhw)
-            if isfeat:
-                feature = np.concatenate(featurelist,0).transpose([0,2,3,4,1])[:,:,:,:,:,np.newaxis]
-                feature = split_comber.combine(feature,sidelen)[...,0]
+                thresh = -3
+                pbb,mask = get_pbb(output,thresh,ismask=True)
+                if isfeat:
+                    feature_selected = feature[mask[0],mask[1],mask[2]]
+                    np.save(os.path.join(save_dir, shortname+'_feature.npy'), feature_selected)
+                #tp,fp,fn,_ = acc(pbb,lbb,0,0.1,0.1)
+                #print([len(tp),len(fp),len(fn)])
+                print([i_name,shortname])
+                e = time.time()
 
-            thresh = -3
-            pbb,mask = get_pbb(output,thresh,ismask=True)
-            if isfeat:
-                feature_selected = feature[mask[0],mask[1],mask[2]]
-                np.save(os.path.join(save_dir, shortname+'_feature.npy'), feature_selected)
-            #tp,fp,fn,_ = acc(pbb,lbb,0,0.1,0.1)
-            #print([len(tp),len(fp),len(fn)])
-            print([i_name,shortname])
-            e = time.time()
-
-            np.save(os.path.join(save_dir, shortname+'_pbb.npy'), pbb)
-            np.save(os.path.join(save_dir, shortname+'_lbb.npy'), lbb)
+                np.save(os.path.join(save_dir, shortname+'_pbb.npy'), pbb)
+                np.save(os.path.join(save_dir, shortname+'_lbb.npy'), lbb)
+            else:
+                print(f"{shortname} done")
     end_time = time.time()
 
 

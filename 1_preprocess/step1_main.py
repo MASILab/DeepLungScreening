@@ -135,6 +135,7 @@ if __name__ == '__main__':
 
     sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
     sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
+    # sess_splits = ['100529time2001']
 
     for i in tqdm(range(len(sess_splits))):
         sess_id = sess_splits[i]
