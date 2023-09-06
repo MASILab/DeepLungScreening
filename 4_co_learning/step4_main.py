@@ -23,7 +23,7 @@ args = parser.parse_args()
 # 'kaggle_cancer']
 
 need_factor = ['with_image', 'with_marker',  
-'age',  'education',  'bmi',  
+'age',  'education',  'bmi',
 'phist', 'fhist', 
 'smo_status', 'quit_time', 'pkyr']
 

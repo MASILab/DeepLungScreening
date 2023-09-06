@@ -182,7 +182,7 @@ class simpleCrop():
 
 def sample(conf,N,T=1):
     if len(conf)>N:
-        target = range(len(conf))
+        target = list(range(len(conf)))
         chosen_list = []
         for i in range(N):
             chosenidx = sampleone(target,conf,T)

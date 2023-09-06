@@ -42,7 +42,7 @@ config['testsplit'] = sess_splits
 
 nodmodel = import_module('net_detector')
 config1, nod_net, loss, get_pbb = nodmodel.get_model()
-checkpoint = torch.load('./2_nodule_detection/detector.ckpt')
+checkpoint = torch.load('/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/2_nodule_detection/detector.ckpt')
 nod_net.load_state_dict(checkpoint['state_dict'])
 
 device = torch.device("cuda:0")
