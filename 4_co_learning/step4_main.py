@@ -45,7 +45,7 @@ data_path = args.feat_root
 
 model = MultipathModelBL(1)
 
-model_pth = './4_co_learning/pretrain.pth'
+model_pth = '/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/4_co_learning/pretrain.pth'
 
 model.load_state_dict(torch.load(model_pth, map_location=lambda storage, location: storage))
 #model.load_state_dict(torch.load(model_pth))
