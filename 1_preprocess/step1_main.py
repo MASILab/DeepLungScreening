@@ -11,6 +11,7 @@ import nibabel as nib
 import argparse
 import pandas as pd
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 def process_mask(mask):
     convex_mask = np.copy(mask)
@@ -118,6 +119,12 @@ def savenpy(name,prep_folder,data_path,use_existing=True):
         #raise
     # print(name+' done')
 
+def save_npy_label(sess_id, args):
+    if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
+        savenpy(name = sess_id, prep_folder = args.prep_root, 
+                data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
+        np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+
 if __name__ == '__main__':
     
     '''
@@ -131,15 +138,20 @@ if __name__ == '__main__':
                         help='the root for save preprocessed data')
     parser.add_argument('--ori_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
                         help='the root of original data')
+    parser.add_argument('--n_jobs', type=int, default=1)
     args = parser.parse_args()
 
     sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
     sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
     # sess_splits = ['100529time2001']
 
-    for i in tqdm(range(len(sess_splits))):
-        sess_id = sess_splits[i]
-        if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
-            savenpy(name = sess_id, prep_folder = args.prep_root, 
-                data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
-            np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+    Parallel(n_jobs=args.n_jobs, prefer="threads")(
+        delayed(save_npy_label)(sess_id, args) for sess_id in tqdm(sess_splits, total=len(sess_splits))
+    )
+    
+    # for i in tqdm(range(len(sess_splits))):
+    #     sess_id = sess_splits[i]
+    #     if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
+    #         savenpy(name = sess_id, prep_folder = args.prep_root, 
+    #             data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
+    #         np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
