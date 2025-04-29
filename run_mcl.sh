@@ -1,12 +1,12 @@
 #!/bin/bash
-ROOT=/home/local/VANDERBILT/litz/data/livu/DeepLungScreening
+ROOT=/home/local/VANDERBILT/litz/data/mcl/DeepLungScreening
 ORI_ROOT=${ROOT}/nifti
 PREP_ROOT=${ROOT}/prep
 BBOX_ROOT=${ROOT}/bbox
 FEAT_ROOT=${ROOT}/feat
-PRED_CSV=${ROOT}/pred/livu_pred_v1.csv
-ALL_SCANS=/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/livu/livu_allscans.csv
-SPLIT_CSV=/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/livu/livu_nospn_cohort_prep_v2.csv
+# PRED_CSV=${ROOT}/pred/livu_pred_v1.csv
+ALL_SCANS=/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/mcl/scan_cohort_df.csv
+SPLIT_CSV=/home/local/VANDERBILT/litz/github/MASILab/DeepLungScreening/cohorts/mcl/scan_cohort_df_prep.csv
 
 echo "Run step 1 data preprocessing ..."
 
