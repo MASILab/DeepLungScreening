@@ -29,7 +29,7 @@ def test_detect(data_loader, net, get_pbb, save_dir, config, device, n_gpu = 1):
     #             print (i_name)
     #             continue
             name = data_loader.dataset.filenames[i_name].split('/')[-1]
-            print ('---------', name)
+            # print ('---------', name)
             shortname = name.split('_clean')[0]
             if not os.path.exists(os.path.join(save_dir, shortname+'_pbb.npy')):
                 s = time.time()
@@ -46,7 +46,7 @@ def test_detect(data_loader, net, get_pbb, save_dir, config, device, n_gpu = 1):
                     if config['output_feature']:
                         isfeat = True
                 n_per_run = n_gpu
-                print(data.size())
+                # print(data.size())
                 splitlist = range(0,len(data)+1,n_gpu)
                 if splitlist[-1]!=len(data):
                     splitlist.append(len(data))
@@ -77,7 +77,7 @@ def test_detect(data_loader, net, get_pbb, save_dir, config, device, n_gpu = 1):
                     np.save(os.path.join(save_dir, shortname+'_feature.npy'), feature_selected)
                 #tp,fp,fn,_ = acc(pbb,lbb,0,0.1,0.1)
                 #print([len(tp),len(fp),len(fn)])
-                print([i_name,shortname])
+                # print([i_name,shortname])
                 e = time.time()
 
                 np.save(os.path.join(save_dir, shortname+'_pbb.npy'), pbb)

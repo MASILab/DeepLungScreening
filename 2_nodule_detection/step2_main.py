@@ -1,4 +1,3 @@
-#from config_submit import config as config_submit
 
 import torch
 
@@ -18,9 +17,9 @@ from importlib import import_module
 import pandas as pd
 import pdb
 import argparse
-
-
+from joblib import Parallel, delayed
 from detect_config import config
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 
@@ -30,13 +29,19 @@ parser.add_argument('--bbox_root', type=str, default='/nfs/masi/gaor2/tmp/justte
                     help='the root for save preprocessed data')
 parser.add_argument('--prep_root', type=str, default='/nfs/masi/gaor2/tmp/justtest/prep',
                     help='the root for save preprocessed data')
+parser.add_argument('--n_jobs', type=int, default=1)
 
 args = parser.parse_args()
 config['datadir'] = args.prep_root
 
-sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
-sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
+sessions = pd.read_csv(args.sess_csv, dtype={'id':str})
+sessions = sessions[~sessions['id'].isnull()]['id'].tolist()
 
+# job_size = len(sessions) // args.n_jobs
+# sess_splits = [sessions[i: i+job_size] for i in range(0, len(sessions), job_size)]
+sess_splits = sessions
+
+# def detect(sess_splits):
 config['testsplit'] = sess_splits
 # config['testsplit'] = ['100529time2001']
 
@@ -59,3 +64,7 @@ test_loader = DataLoader(dataset, batch_size = 1,
     shuffle = False, num_workers = 1, pin_memory=False, collate_fn =collate)
 
 test_detect(test_loader, nod_net, get_pbb, bbox_result_path, config1, device)
+
+# Parallel(n_jobs=args.n_jobs, prefer="threads")(
+#     delayed(detect)(sess_split) for sess_split in tqdm(sess_splits, total=len(sess_splits))
+# )

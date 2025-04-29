@@ -124,6 +124,11 @@ def save_npy_label(sess_id, args):
         savenpy(name = sess_id, prep_folder = args.prep_root, 
                 data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
         np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+    
+def overwrite_npy_label(sess_id, args):
+    savenpy(name = sess_id, prep_folder = args.prep_root, 
+            data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"), use_existing=False)
+    np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
 
 if __name__ == '__main__':
     
@@ -148,6 +153,9 @@ if __name__ == '__main__':
     Parallel(n_jobs=args.n_jobs, prefer="threads")(
         delayed(save_npy_label)(sess_id, args) for sess_id in tqdm(sess_splits, total=len(sess_splits))
     )
+
+    # use this to overwrite the existing npy and label files
+    # overwrite_npy_label('39336276282time20130204', args)
     
     # for i in tqdm(range(len(sess_splits))):
     #     sess_id = sess_splits[i]
