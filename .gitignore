@@ -4,7 +4,5 @@ __pycache__/
 .DS_Store
 env/
 .venv/
-*.ckpt
-*.pth
 *.npy
 *.nii.gz
