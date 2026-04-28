@@ -38,7 +38,7 @@ casenet = casemodel.CaseNet(topk=5)
 # load_state_dict
 config2 = casemodel.config
 _ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'classifier_state_dictpy3.ckpt')
-state_dict = torch.load(_ckpt_path)
+state_dict = torch.load(_ckpt_path, weights_only=False)
 
 model_dict = casenet.state_dict()
 pretrained_dict = {k: v for k, v in state_dict.items() if k in model_dict}
