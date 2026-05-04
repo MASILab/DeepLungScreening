@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT=/valiant02/masi/zuol1/projects/biodesix/DeepLungScreen/data/finetune
 
 # Per-cohort CSVs (committed under deeplungscreen/cohorts/finetune/).
-COHORTS=("nodulevu" "nlst")
+COHORTS=("nodulevu")
 
 CHUNK_SIZE=2000        # rows per chunk
 N_JOBS=8               # parallelism for Step 1 (CPU)
@@ -107,7 +107,7 @@ PYEOF
 # Main loop: per cohort, split into chunks, run sequentially.
 # ---------------------------------------------------------------------------
 for COHORT in "${COHORTS[@]}"; do
-    SRC_CSV=${SCRIPT_DIR}/cohorts/finetune/finetune_stageA_${COHORT}.csv
+    SRC_CSV=${SCRIPT_DIR}/cohorts/finetune/finetune_stageA_${COHORT}_unharmonized.csv
     if [ ! -f "${SRC_CSV}" ]; then
         echo "SKIP: cohort CSV not found: ${SRC_CSV}"
         continue
