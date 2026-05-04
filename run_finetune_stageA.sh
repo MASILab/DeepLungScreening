@@ -107,7 +107,7 @@ PYEOF
 # Main loop: per cohort, split into chunks, run sequentially.
 # ---------------------------------------------------------------------------
 for COHORT in "${COHORTS[@]}"; do
-    SRC_CSV=${SCRIPT_DIR}/cohorts/finetune/finetune_stageA_${COHORT}_unharmonized.csv
+    SRC_CSV=${SCRIPT_DIR}/cohorts/biodesix_finetune_20260504/finetune_stageA_${COHORT}_unharmonized.csv
     if [ ! -f "${SRC_CSV}" ]; then
         echo "SKIP: cohort CSV not found: ${SRC_CSV}"
         continue
