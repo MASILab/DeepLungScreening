@@ -12,14 +12,23 @@ if [ ! -d "${CHUNK_ROOT}" ]; then
     exit 0
 fi
 
+count_glob () {
+    local n=0
+    for f in $1; do
+        [ -e "$f" ] && n=$((n + 1))
+    done
+    echo "$n"
+}
+
 echo "Cohort        chunks  claimed  done  pct"
 echo "------------  ------  -------  ----  ----"
 for d in "${CHUNK_ROOT}"/*/; do
+    [ -d "${d}" ] || continue
     cohort=$(basename "${d}")
-    total=$(ls "${d}"chunk_*.csv 2>/dev/null | wc -l)
+    total=$(count_glob "${d}chunk_*.csv")
     [ "${total}" -eq 0 ] && continue
-    claimed=$(ls -d "${d}"chunk_*.lock 2>/dev/null | wc -l)
-    done=$(ls "${d}"chunk_*.lock/done 2>/dev/null | wc -l)
+    claimed=$(count_glob "${d}chunk_*.lock")
+    done=$(count_glob "${d}chunk_*.lock/done")
     pct=$(awk "BEGIN { if (${total}==0) print 0; else printf \"%.0f\", 100*${done}/${total} }")
     printf "%-12s  %6d  %7d  %4d  %3s%%\n" "${cohort}" "${total}" "${claimed}" "${done}" "${pct}"
 done
@@ -28,11 +37,12 @@ echo ""
 echo "Per-cohort output file counts:"
 printf "  %-12s %8s %8s %8s %8s %8s\n" "cohort" "nifti" "prep" "bbox" "feat64" "feat128"
 for d in "${CHUNK_ROOT}"/*/; do
+    [ -d "${d}" ] || continue
     cohort=$(basename "${d}")
     counts=()
     for sub in nifti prep bbox feat64 feat128; do
         if [ -d "${ROOT}/${cohort}/${sub}" ]; then
-            counts+=( "$(ls "${ROOT}/${cohort}/${sub}" 2>/dev/null | wc -l)" )
+            counts+=( "$(count_glob "${ROOT}/${cohort}/${sub}/*")" )
         else
             counts+=( "-" )
         fi

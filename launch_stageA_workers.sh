@@ -108,15 +108,25 @@ echo "============================================================"
 # Show how many chunks remain so the user can sanity-check before launch.
 ROOT=/valiant02/masi/zuol1/projects/biodesix/DeepLungScreen/data/finetune_harmonized
 CHUNK_ROOT=${ROOT}/chunks
-if [ -d "${CHUNK_ROOT}" ]; then
+count_glob () {
+    # Count files matching a glob, robust to set -e + pipefail when nothing matches.
+    local n=0
+    for f in $1; do
+        [ -e "$f" ] && n=$((n + 1))
+    done
+    echo "$n"
+}
+
+if [ -d "${CHUNK_ROOT}" ] && [ -n "$(ls -A "${CHUNK_ROOT}" 2>/dev/null || true)" ]; then
     echo "Current chunk state on shared NFS:"
     for d in "${CHUNK_ROOT}"/*/; do
+        [ -d "${d}" ] || continue
         c=$(basename "${d}")
         if [ "${COHORT}" != "all" ] && [ "${c}" != "${COHORT}" ]; then continue; fi
-        total=$(ls "${d}"chunk_*.csv 2>/dev/null | wc -l)
+        total=$(count_glob "${d}chunk_*.csv")
         [ "${total}" -eq 0 ] && continue
-        claimed=$(ls -d "${d}"chunk_*.lock 2>/dev/null | wc -l)
-        done=$(ls "${d}"chunk_*.lock/done 2>/dev/null | wc -l)
+        claimed=$(count_glob "${d}chunk_*.lock")
+        done=$(count_glob "${d}chunk_*.lock/done")
         printf "  %-12s total=%d  claimed=%d  done=%d  pending=%d\n" \
             "${c}" "${total}" "${claimed}" "${done}" "$((total - claimed))"
     done
