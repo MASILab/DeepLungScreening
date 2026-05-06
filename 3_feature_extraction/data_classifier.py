@@ -35,7 +35,11 @@ class DataBowl3Classifier(Dataset):
         self.pbb_label = []
         self.subj_name = []
         idcs = split
-        self.filenames = [os.path.join(datadir, '%s_clean.npy' % idx.split('-')[0]) for idx in idcs]
+        # NOTE: original code split ids on '-' to strip a label suffix used by
+        # the Kaggle Data Science Bowl convention.  Our ids may legitimately
+        # contain '-' (e.g. 'sub-00165047709_ses-20211128_acq-AX_1MM_4'), so
+        # we use the full id verbatim — same convention as Step 2's bbox files.
+        self.filenames = [os.path.join(datadir, '%s_clean.npy' % idx) for idx in idcs]
         if self.phase!='test':
             self.yset = 1-np.array([f.split('-')[1][2] for f in idcs]).astype('int')
  
