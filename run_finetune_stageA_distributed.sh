@@ -44,14 +44,11 @@ cd "${SCRIPT_DIR}"
 
 COHORT_CSV_DIR="${SCRIPT_DIR}/${COHORT_CSV_DIR_DEFAULT}"
 
-ORI_ROOT=${ROOT}/nifti
-PREP_ROOT=${ROOT}/prep
-BBOX_ROOT=${ROOT}/bbox
-FEAT64=${ROOT}/feat64
-FEAT128=${ROOT}/feat128
+# Per-cohort output dirs are set inside the cohort loop (see below).
+# Only chunks/ and logs/ are shared at ROOT level.
 CHUNK_ROOT=${ROOT}/chunks
 LOG_DIR=${ROOT}/logs
-mkdir -p "${ORI_ROOT}" "${PREP_ROOT}" "${BBOX_ROOT}" "${FEAT64}" "${FEAT128}" "${CHUNK_ROOT}" "${LOG_DIR}"
+mkdir -p "${ROOT}" "${CHUNK_ROOT}" "${LOG_DIR}"
 
 # Worker identity (used in lock metadata)
 WORKER_ID="${HOSTNAME}_gpu${CUDA_VISIBLE_DEVICES:-cpu}_$$"
@@ -227,6 +224,14 @@ for COHORT in "${SELECTED[@]}"; do
     echo "##########################################################"
     echo "# Cohort: ${COHORT}    Worker: ${WORKER_ID}"
     echo "##########################################################"
+
+    # Per-cohort output dirs (used by process_chunk via dynamic scoping).
+    ORI_ROOT=${ROOT}/${COHORT}/nifti
+    PREP_ROOT=${ROOT}/${COHORT}/prep
+    BBOX_ROOT=${ROOT}/${COHORT}/bbox
+    FEAT64=${ROOT}/${COHORT}/feat64
+    FEAT128=${ROOT}/${COHORT}/feat128
+    mkdir -p "${ORI_ROOT}" "${PREP_ROOT}" "${BBOX_ROOT}" "${FEAT64}" "${FEAT128}"
 
     if ! ensure_chunks "${COHORT}"; then
         continue

@@ -25,12 +25,19 @@ for d in "${CHUNK_ROOT}"/*/; do
 done
 
 echo ""
-echo "Output file counts:"
-for sub in nifti prep bbox feat64 feat128; do
-    if [ -d "${ROOT}/${sub}" ]; then
-        n=$(ls "${ROOT}/${sub}" 2>/dev/null | wc -l)
-        printf "  %-8s %d\n" "${sub}" "${n}"
-    fi
+echo "Per-cohort output file counts:"
+printf "  %-12s %8s %8s %8s %8s %8s\n" "cohort" "nifti" "prep" "bbox" "feat64" "feat128"
+for d in "${CHUNK_ROOT}"/*/; do
+    cohort=$(basename "${d}")
+    counts=()
+    for sub in nifti prep bbox feat64 feat128; do
+        if [ -d "${ROOT}/${cohort}/${sub}" ]; then
+            counts+=( "$(ls "${ROOT}/${cohort}/${sub}" 2>/dev/null | wc -l)" )
+        else
+            counts+=( "-" )
+        fi
+    done
+    printf "  %-12s %8s %8s %8s %8s %8s\n" "${cohort}" "${counts[@]}"
 done
 
 # Stale locks (claimed but not done, older than 6 hours)
