@@ -29,6 +29,7 @@ COHORTS_ALL=("bronch" "veritas" "reliant1" "reliant2" "1496" "vlsp" "mcl" "nodul
 CHUNK_SIZE=${CHUNK_SIZE:-2000}     # rows per chunk
 N_JOBS=${N_JOBS:-8}                # Step 1 parallelism per worker (CPU)
 STALE_HOURS=${STALE_HOURS:-6}      # claim recovered if lock older than this and no done file
+MAX_CHUNKS=${MAX_CHUNKS:-0}        # exit after this many chunks (0 = no limit)
 
 RUN_STEP0=${RUN_STEP0:-1}
 RUN_STEP1=${RUN_STEP1:-1}
@@ -86,8 +87,11 @@ ensure_chunks () {
     fi
     mkdir -p "${out_dir}"
     if compgen -G "${out_dir}/chunk_*.csv" > /dev/null; then
-        return 0    # already split
+        local existing=$(ls "${out_dir}"/chunk_*.csv 2>/dev/null | wc -l)
+        echo "  Cohort ${cohort}: ${existing} chunks already split (reusing)"
+        return 0
     fi
+    echo "  Cohort ${cohort}: splitting ${src_csv} -> ${out_dir}"
     python3 - "${src_csv}" "${out_dir}" "${CHUNK_SIZE}" <<'PYEOF'
 import os, sys, pandas as pd
 src, dst, sz = sys.argv[1], sys.argv[2], int(sys.argv[3])
@@ -98,6 +102,7 @@ for i, start in enumerate(range(0, n, sz)):
         os.path.join(dst, f"chunk_{i:0{ndigits}d}.csv"), index=False)
 print(f"    split {n} rows -> {(n + sz - 1)//sz} chunks of <= {sz}")
 PYEOF
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -107,6 +112,8 @@ PYEOF
 # Echos the claimed CSV path on stdout, or empty string if nothing left.
 # ---------------------------------------------------------------------------
 claim_next_chunk () {
+    # Echoes the claimed CSV path (or empty) on stdout. ALWAYS exits 0 so that
+    # `var=$(claim_next_chunk ...)` doesn't trip `set -e` when nothing's left.
     local cohort=$1
     local out_dir="${CHUNK_ROOT}/${cohort}"
     local stale_min=$((STALE_HOURS * 60))
@@ -127,7 +134,7 @@ claim_next_chunk () {
 
         # Lock exists; check staleness.
         if [ -d "${lockdir}" ] && [ ! -f "${lockdir}/done" ]; then
-            local stale=$(find "${lockdir}" -maxdepth 0 -mmin +${stale_min} | wc -l)
+            local stale=$(find "${lockdir}" -maxdepth 0 -mmin +${stale_min} 2>/dev/null | wc -l)
             if [ "${stale}" -gt 0 ]; then
                 echo "  reclaiming stale lock: ${lockdir}" >&2
                 rm -rf "${lockdir}" 2>/dev/null || true
@@ -139,7 +146,10 @@ claim_next_chunk () {
             fi
         fi
     done
-    echo ""; return 1
+    # No chunk available — emit empty string and return success so that
+    # `set -e` doesn't bring the whole script down.
+    echo ""
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -222,7 +232,12 @@ for COHORT in "${SELECTED[@]}"; do
         continue
     fi
 
+    processed=0
     while true; do
+        if [ "${MAX_CHUNKS}" -gt 0 ] && [ "${processed}" -ge "${MAX_CHUNKS}" ]; then
+            echo "  Worker ${WORKER_ID} reached MAX_CHUNKS=${MAX_CHUNKS}; exiting cohort ${COHORT}"
+            break
+        fi
         CHUNK_CSV=$(claim_next_chunk "${COHORT}")
         if [ -z "${CHUNK_CSV}" ]; then
             echo "  No more chunks in cohort ${COHORT} for worker ${WORKER_ID}"
@@ -232,7 +247,8 @@ for COHORT in "${SELECTED[@]}"; do
         process_chunk "${CHUNK_CSV}" "${TAG}"
         # Mark this chunk done so future workers / re-runs skip it.
         touch "${CHUNK_CSV%.csv}.lock/done"
-        echo "  Chunk ${TAG} done at $(date)"
+        processed=$((processed + 1))
+        echo "  Chunk ${TAG} done at $(date) (worker total: ${processed})"
     done
 done
 
