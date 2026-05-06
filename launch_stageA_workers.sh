@@ -86,6 +86,12 @@ if [ ! -x "${RUNNER}" ]; then
 fi
 
 ENV_EXPORT=""
+# Pin BLAS to 1 thread per joblib worker by default, otherwise numpy/scipy
+# spawn one BLAS thread per core inside each joblib worker, leading to
+# severe oversubscription on wide-CPU boxes.  Override only if you know why.
+ENV_EXPORT+="export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}; "
+ENV_EXPORT+="export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-1}; "
+ENV_EXPORT+="export MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}; "
 [ -n "${ENVPY:-}"      ] && ENV_EXPORT+="export ENVPY=${ENVPY}; "
 [ -n "${MAX_CHUNKS}"   ] && ENV_EXPORT+="export MAX_CHUNKS=${MAX_CHUNKS}; "
 [ -n "${N_JOBS:-}"     ] && ENV_EXPORT+="export N_JOBS=${N_JOBS}; "
