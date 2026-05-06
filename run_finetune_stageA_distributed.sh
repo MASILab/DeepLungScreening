@@ -78,6 +78,20 @@ ensure_chunks () {
     local cohort=$1
     local src_csv="${COHORT_CSV_DIR}/finetune_stageA_harmonized_${cohort}.csv"
     local out_dir="${CHUNK_ROOT}/${cohort}"
+
+    # Special: smoketest synthesizes a 5-row CSV from veritas the first time
+    # it's invoked.  Lets you sanity-check the whole pipeline end-to-end fast
+    # without polluting any real cohort's outputs.
+    if [ "${cohort}" = "smoketest" ] && [ ! -f "${src_csv}" ]; then
+        local seed_csv="${COHORT_CSV_DIR}/finetune_stageA_harmonized_veritas.csv"
+        if [ ! -f "${seed_csv}" ]; then
+            echo "  SKIP smoketest: seed CSV missing at ${seed_csv} (run inventory script first)"
+            return 1
+        fi
+        echo "  Building smoketest cohort from first 5 rows of veritas"
+        head -6 "${seed_csv}" > "${src_csv}"
+    fi
+
     if [ ! -f "${src_csv}" ]; then
         echo "  SKIP cohort ${cohort}: no CSV at ${src_csv}"
         return 1
