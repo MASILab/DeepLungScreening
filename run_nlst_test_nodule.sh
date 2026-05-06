@@ -12,7 +12,7 @@ set -euo pipefail
 ROOT=/valiant02/masi/zuol1/projects/biodesix/DeepLungScreen/data/nlst_test_nodule
 
 # Session CSV (must have columns: id, fpath).
-SPLIT_CSV=/valiant02/masi/zuol1/projects/biodesix/DeepLungScreen/cohorts/nlst/nlst_test_nodule.csv
+SPLIT_CSV=/valiant02/masi/zuol1/projects/biodesix/DeepLungScreen/cohorts/nlst/nlst_test_nodule_step1ok.csv
 
 # Parallelism for stage 1 (CPU-bound).
 N_JOBS=8
