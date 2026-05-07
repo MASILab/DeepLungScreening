@@ -209,19 +209,63 @@ PYEOF
             >>"${LOG}" 2>&1
     fi
 
+    # Filter the chunk CSV down to IDs that actually have {id}_clean.npy in prep/.
+    # Step 1 silently drops IDs whose lung segmentation fails ("Unable to segment
+    # image"); Step 2 would otherwise crash on the first missing _clean.npy.
+    local CHUNK_CSV_OK="${CHUNK_CSV%.csv}.step1ok.csv"
+    echo "  Filter: keep only IDs with {id}_clean.npy in ${PREP_ROOT}"
+    python3 - "${CHUNK_CSV}" "${PREP_ROOT}" "${CHUNK_CSV_OK}" >>"${LOG}" 2>&1 <<'PYEOF'
+import os, sys, pandas as pd
+src, prep_root, dst = sys.argv[1], sys.argv[2], sys.argv[3]
+df = pd.read_csv(src, dtype={'id': str})
+keep = df['id'].apply(lambda i: os.path.isfile(os.path.join(prep_root, f"{i}_clean.npy")))
+df_ok = df[keep]
+df_ok.to_csv(dst, index=False)
+print(f"    step1ok filter: {len(df_ok)}/{len(df)} kept", flush=True)
+PYEOF
+    local NUM_OK
+    NUM_OK=$(($(wc -l < "${CHUNK_CSV_OK}") - 1))
+    echo "    -> ${NUM_OK} IDs survived Step 1"
+
+    if [ "${NUM_OK}" -le 0 ]; then
+        echo "  WARN: 0 IDs left after Step 1; skipping Steps 2/3 for this chunk"
+        return 0
+    fi
+
     if [ "${RUN_STEP2}" = "1" ]; then
         echo "  Step 2: nodule detection (GPU)"
         python3 ./2_nodule_detection/step2_main.py \
-            --sess_csv  "${CHUNK_CSV}" \
+            --sess_csv  "${CHUNK_CSV_OK}" \
             --bbox_root "${BBOX_ROOT}" \
             --prep_root "${PREP_ROOT}" \
             >>"${LOG}" 2>&1
     fi
 
+    # Same defensive filter between Steps 2 and 3 — Step 2 can also produce no
+    # bbox for some IDs (rare, but possible).  Use _pbb.npy as the survival signal.
+    local CHUNK_CSV_OK2="${CHUNK_CSV%.csv}.step2ok.csv"
+    python3 - "${CHUNK_CSV_OK}" "${BBOX_ROOT}" "${CHUNK_CSV_OK2}" >>"${LOG}" 2>&1 <<'PYEOF'
+import os, sys, pandas as pd
+src, bbox_root, dst = sys.argv[1], sys.argv[2], sys.argv[3]
+df = pd.read_csv(src, dtype={'id': str})
+keep = df['id'].apply(lambda i: os.path.isfile(os.path.join(bbox_root, f"{i}_pbb.npy")))
+df_ok = df[keep]
+df_ok.to_csv(dst, index=False)
+print(f"    step2ok filter: {len(df_ok)}/{len(df)} kept", flush=True)
+PYEOF
+    local NUM_OK2
+    NUM_OK2=$(($(wc -l < "${CHUNK_CSV_OK2}") - 1))
+    echo "    -> ${NUM_OK2} IDs survived Step 2"
+
+    if [ "${NUM_OK2}" -le 0 ]; then
+        echo "  WARN: 0 IDs left after Step 2; skipping Step 3 for this chunk"
+        return 0
+    fi
+
     if [ "${RUN_STEP3}" = "1" ]; then
         echo "  Step 3: feature extraction (GPU)"
         python3 ./3_feature_extraction/step3_main.py \
-            --sess_csv  "${CHUNK_CSV}" \
+            --sess_csv  "${CHUNK_CSV_OK2}" \
             --bbox_root "${BBOX_ROOT}" \
             --prep_root "${PREP_ROOT}" \
             --feat64    "${FEAT64}" \
