@@ -212,7 +212,9 @@ PYEOF
     # Filter the chunk CSV down to IDs that actually have {id}_clean.npy in prep/.
     # Step 1 silently drops IDs whose lung segmentation fails ("Unable to segment
     # image"); Step 2 would otherwise crash on the first missing _clean.npy.
-    local CHUNK_CSV_OK="${CHUNK_CSV%.csv}.step1ok.csv"
+    # Survivor CSVs live INSIDE the lock dir so they don't match chunk_*.csv globs.
+    local LOCKDIR="${CHUNK_CSV%.csv}.lock"
+    local CHUNK_CSV_OK="${LOCKDIR}/step1ok.csv"
     echo "  Filter: keep only IDs with {id}_clean.npy in ${PREP_ROOT}"
     python3 - "${CHUNK_CSV}" "${PREP_ROOT}" "${CHUNK_CSV_OK}" >>"${LOG}" 2>&1 <<'PYEOF'
 import os, sys, pandas as pd
@@ -243,7 +245,7 @@ PYEOF
 
     # Same defensive filter between Steps 2 and 3 — Step 2 can also produce no
     # bbox for some IDs (rare, but possible).  Use _pbb.npy as the survival signal.
-    local CHUNK_CSV_OK2="${CHUNK_CSV%.csv}.step2ok.csv"
+    local CHUNK_CSV_OK2="${LOCKDIR}/step2ok.csv"
     python3 - "${CHUNK_CSV_OK}" "${BBOX_ROOT}" "${CHUNK_CSV_OK2}" >>"${LOG}" 2>&1 <<'PYEOF'
 import os, sys, pandas as pd
 src, bbox_root, dst = sys.argv[1], sys.argv[2], sys.argv[3]
