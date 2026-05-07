@@ -23,8 +23,9 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 ROOT=/valiant02/masi/zuol1/projects/biodesix/DeepLungScreen/data/finetune_harmonized
 COHORT_CSV_DIR_DEFAULT=cohorts/finetune_harmonized      # relative to SCRIPT_DIR
-COHORTS_ALL=("bronch" "veritas" "reliant1" "reliant2" "1496" "vlsp" "mcl" "nodulevu")
+COHORTS_ALL=("bronch" "veritas" "reliant1" "reliant2" "1496" "vlsp" "mcl" "nodulevu" "nlst")
 # Order = smallest-first so problems surface fast on early cohorts.
+# NLST is largest (~65k rows after dropping un-harmonized) and goes last.
 
 CHUNK_SIZE=${CHUNK_SIZE:-2000}     # rows per chunk
 N_JOBS=${N_JOBS:-8}                # Step 1 parallelism per worker (CPU)
