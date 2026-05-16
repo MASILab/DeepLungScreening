@@ -112,8 +112,9 @@ def forward_and_loss(model, feats, biomarkers, labels, pos_weight, device,
     if both_mask.any():
         f, b, y = feats[both_mask], biomarkers[both_mask], labels[both_mask]
         out = model(Z3D, Z1D, f, b)
-        # when both > 0: (bothPred, imgPred, clicPred, bothImgPred, bothClicPred)
-        bothPred, _, _, bothImgPred, bothClicPred = out
+        # MultipathModelBL.forward returns:
+        #   (imgPred, clicPred, bothImgPred, bothClicPred, bothPred)
+        _, _, bothImgPred, bothClicPred, bothPred = out
         loss = (weighted_bce(bothPred, y, pos_weight)
                 + aux_weight * weighted_bce(bothImgPred.squeeze(-1), y, pos_weight)
                 + aux_weight * weighted_bce(bothClicPred.squeeze(-1), y, pos_weight))
@@ -126,8 +127,8 @@ def forward_and_loss(model, feats, biomarkers, labels, pos_weight, device,
     if img_only_mask.any():
         f, y = feats[img_only_mask], labels[img_only_mask]
         out = model(f, Z1D, Z3D, Z1D)
-        # when both == 0: (imgPred, clicPred, 0, 0, 0)
-        imgPred = out[0]
+        # when both == 0: forward returns (imgPred, clicPred, 0, 0, 0)
+        imgPred, _, _, _, _ = out
         loss = weighted_bce(imgPred, y, pos_weight)
         total_loss = total_loss + loss * y.shape[0]
         n_total += y.shape[0]
@@ -138,7 +139,7 @@ def forward_and_loss(model, feats, biomarkers, labels, pos_weight, device,
     if fac_only_mask.any():
         b, y = biomarkers[fac_only_mask], labels[fac_only_mask]
         out = model(Z3D, b, Z3D, Z1D)
-        clicPred = out[1]
+        _, clicPred, _, _, _ = out
         loss = weighted_bce(clicPred, y, pos_weight)
         total_loss = total_loss + loss * y.shape[0]
         n_total += y.shape[0]

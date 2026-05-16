@@ -111,6 +111,11 @@ class MultipathModel(nn.Module):
             return imgPred, clicPred, torch.zeros((0,1)), torch.zeros((0,1)), torch.zeros((0,1))
 
 class MultipathModelBL(nn.Module):
+    # forward() returns:
+    #   (imgPred, clicPred, bothImgPred, bothClicPred, bothPred)
+    # imgPred is defined only when imgOnly is non-empty; we initialize it to an
+    # empty tensor up front so the return statement works even if the caller
+    # passes an empty imgOnly (e.g. fine-tuning that routes per modality).
     def __init__(self, n_class):
         super(MultipathModelBL, self).__init__()
         self.n_class = n_class
@@ -151,9 +156,13 @@ class MultipathModelBL(nn.Module):
         )  
         
     def forward(self, imgOnly, factorsOnly, bothImg, bothFactor):
+        # Default for imgPred so the return statements work when imgOnly is empty
+        # (e.g. when fine-tuning routes a "both-only" sub-batch through here).
+        ref_device = bothFactor.device
+        imgPred = torch.zeros((0,), device=ref_device)
 
         if imgOnly.shape[0] > 0:
-            
+
             b_size, n_nodule, c = imgOnly.size()
             centerFeat = imgOnly.view((b_size * n_nodule, c))
             out = self.dropout(centerFeat)
@@ -170,7 +179,7 @@ class MultipathModelBL(nn.Module):
                 imgPred = self.imgonly_fc(imgFeat).squeeze(1)
             except:
                 pdb.set_trace()
-        
+
         if factorsOnly.shape[0] > 0:
             assert (factorsOnly[:, 1] == 1).all()
             clicFeat = self.cliclayer(factorsOnly[:, 2:])#.squeeze(1)
