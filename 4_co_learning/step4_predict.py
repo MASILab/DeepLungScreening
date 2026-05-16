@@ -31,7 +31,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 from model import MultipathModelBL
-from step4_train import (DLSFinetuneDataset, BIOMARKERS,
+from step4_train import (DLSFinetuneDataset, BIOMARKERS, CLINICAL_MODES,
                          split_batch_by_modality)
 
 
@@ -42,6 +42,8 @@ def main():
     p.add_argument("--output_csv",  required=True)
     p.add_argument("--label_col",   default="lung_cancer",
                    help="Empty string disables metric computation.")
+    p.add_argument("--clinical_mode", choices=list(CLINICAL_MODES), default="all_biomarkers",
+                   help="Must match the clinical_mode used at training time.")
     p.add_argument("--batch_size",  type=int, default=256)
     p.add_argument("--num_workers", type=int, default=4)
     args = p.parse_args()
@@ -67,7 +69,8 @@ def main():
         if "lung_cancer" not in raw_df.columns:
             raw_df["lung_cancer"] = 0
             raw_df.to_csv(tmp_csv, index=False)
-    ds = DLSFinetuneDataset(tmp_csv, label_col)
+    print(f"Clinical mode: {args.clinical_mode}")
+    ds = DLSFinetuneDataset(tmp_csv, label_col, args.clinical_mode)
 
     loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False,
                         num_workers=args.num_workers, pin_memory=True)

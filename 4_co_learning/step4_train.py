@@ -39,20 +39,56 @@ from model import MultipathModelBL
 BIOMARKERS = ["age", "education", "bmi", "phist", "fhist",
               "smo_status", "quit_time", "pkyr"]
 
+NODULE_SIZE_DENOM = 30.0   # normalize nodule_size by dividing by this
+
+CLINICAL_MODES = ("all_biomarkers", "image_only", "nodule_size_only")
+
 
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
 class DLSFinetuneDataset(Dataset):
-    def __init__(self, csv_path, label_col="lung_cancer"):
+    """
+    clinical_mode controls how the 12-dim biomarker vector is filled and which
+    DLS path each sample routes through:
+
+      'all_biomarkers' (default, original DLS):
+          biomarker[0] = with_image, [1] = with_marker (from CSV)
+          biomarker[2:10] = 8 DLS biomarkers (from CSV)
+          biomarker[10:12] = 0 (plco/kaggle placeholders)
+
+      'image_only':
+          biomarker[0] = 1, [1] = 0  -> routes every sample through imgOnly path
+          biomarker[2:12] = 0        -> unused
+          Trains only imgPred. Used for the image-only ablation.
+
+      'nodule_size_only':
+          biomarker[0] = 1, [1] = 1  -> routes every sample through 'both' path
+          biomarker[2] = nodule_size / NODULE_SIZE_DENOM (0 if NaN/missing)
+          biomarker[3:12] = 0
+          Trains bothPred (joint head). Used for the image+size deployment model.
+    """
+    def __init__(self, csv_path, label_col="lung_cancer",
+                 clinical_mode="all_biomarkers"):
+        assert clinical_mode in CLINICAL_MODES, f"clinical_mode must be one of {CLINICAL_MODES}"
         df = pd.read_csv(csv_path, low_memory=False)
         for c in BIOMARKERS:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
-        df["with_image"]  = df["with_image"].astype(int)
-        df["with_marker"] = df["with_marker"].astype(int)
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+            else:
+                df[c] = 0.0
+        if "nodule_size" in df.columns:
+            df["nodule_size"] = pd.to_numeric(df["nodule_size"], errors="coerce").fillna(0.0)
+        else:
+            df["nodule_size"] = 0.0
+        df["with_image"]  = df.get("with_image", 1)
+        df["with_marker"] = df.get("with_marker", 0)
+        df["with_image"]  = pd.to_numeric(df["with_image"], errors="coerce").fillna(0).astype(int)
+        df["with_marker"] = pd.to_numeric(df["with_marker"], errors="coerce").fillna(0).astype(int)
         df[label_col]     = pd.to_numeric(df[label_col], errors="coerce").fillna(0).astype(int)
         self.df = df.reset_index(drop=True)
         self.label_col = label_col
+        self.clinical_mode = clinical_mode
 
     def __len__(self):
         return len(self.df)
@@ -60,14 +96,18 @@ class DLSFinetuneDataset(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         feat = np.load(row["feat128_path"]).astype(np.float32)            # (5, 128)
-        # 12-dim biomarker matches the pretrain.pth convention:
-        #   [0]=with_image, [1]=with_marker, [2:10]=8 DLS biomarkers,
-        #   [10]=plco, [11]=kaggle_cancer. We don't have plco/kaggle scores
-        #   for the biodesix cohort, so positions [10:12] stay zero.
         biomarker = np.zeros(12, dtype=np.float32)
-        biomarker[0]    = float(row["with_image"])
-        biomarker[1]    = float(row["with_marker"])
-        biomarker[2:10] = row[BIOMARKERS].values.astype(np.float32)
+        if self.clinical_mode == "image_only":
+            biomarker[0] = 1.0    # with_image
+            biomarker[1] = 0.0    # with_marker -> imgOnly routing
+        elif self.clinical_mode == "nodule_size_only":
+            biomarker[0] = 1.0    # with_image
+            biomarker[1] = 1.0    # with_marker -> 'both' routing
+            biomarker[2] = float(row["nodule_size"]) / NODULE_SIZE_DENOM
+        else:  # all_biomarkers (original convention)
+            biomarker[0]    = float(row["with_image"])
+            biomarker[1]    = float(row["with_marker"])
+            biomarker[2:10] = row[BIOMARKERS].values.astype(np.float32)
         label = float(row[self.label_col])
         return (
             torch.from_numpy(feat),
@@ -174,6 +214,8 @@ def main():
     p.add_argument("--num_workers",   type=int, default=4)
     p.add_argument("--aux_weight",    type=float, default=0.5,
                    help="Weight on imgPred/clicPred auxiliary losses for both-modality samples.")
+    p.add_argument("--clinical_mode", choices=list(CLINICAL_MODES), default="all_biomarkers",
+                   help="How to build the per-sample clinical input (see DLSFinetuneDataset docstring).")
     p.add_argument("--seed",          type=int, default=42)
     args = p.parse_args()
 
@@ -187,8 +229,9 @@ def main():
         json.dump(vars(args), f, indent=2)
 
     # --- data ---
-    train_ds = DLSFinetuneDataset(args.train_csv, args.label_col)
-    valid_ds = DLSFinetuneDataset(args.valid_csv, args.label_col)
+    print(f"Clinical mode: {args.clinical_mode}")
+    train_ds = DLSFinetuneDataset(args.train_csv, args.label_col, args.clinical_mode)
+    valid_ds = DLSFinetuneDataset(args.valid_csv, args.label_col, args.clinical_mode)
     print(f"Train: {len(train_ds)} samples  |  Valid: {len(valid_ds)} samples")
 
     pos = int((train_ds.df[args.label_col] == 1).sum())
