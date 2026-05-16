@@ -60,7 +60,11 @@ class DLSFinetuneDataset(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         feat = np.load(row["feat128_path"]).astype(np.float32)            # (5, 128)
-        biomarker = np.zeros(10, dtype=np.float32)
+        # 12-dim biomarker matches the pretrain.pth convention:
+        #   [0]=with_image, [1]=with_marker, [2:10]=8 DLS biomarkers,
+        #   [10]=plco, [11]=kaggle_cancer. We don't have plco/kaggle scores
+        #   for the biodesix cohort, so positions [10:12] stay zero.
+        biomarker = np.zeros(12, dtype=np.float32)
         biomarker[0]    = float(row["with_image"])
         biomarker[1]    = float(row["with_marker"])
         biomarker[2:10] = row[BIOMARKERS].values.astype(np.float32)
@@ -102,7 +106,7 @@ def forward_and_loss(model, feats, biomarkers, labels, pos_weight, device,
     all_pred, all_lbl = [], []
 
     Z3D = torch.zeros((0, 5, 128), device=device, dtype=feats.dtype)
-    Z1D = torch.zeros((0, 10), device=device, dtype=biomarkers.dtype)
+    Z1D = torch.zeros((0, 12), device=device, dtype=biomarkers.dtype)
 
     # --- both-modality samples (main training signal) ---
     if both_mask.any():
@@ -121,8 +125,6 @@ def forward_and_loss(model, feats, biomarkers, labels, pos_weight, device,
     # --- image-only samples ---
     if img_only_mask.any():
         f, y = feats[img_only_mask], labels[img_only_mask]
-        b_zero = torch.zeros((f.shape[0], 10), device=device, dtype=biomarkers.dtype)
-        b_zero[:, 0] = 1.0  # with_image flag
         out = model(f, Z1D, Z3D, Z1D)
         # when both == 0: (imgPred, clicPred, 0, 0, 0)
         imgPred = out[0]
