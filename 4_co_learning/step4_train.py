@@ -41,7 +41,8 @@ BIOMARKERS = ["age", "education", "bmi", "phist", "fhist",
 
 NODULE_SIZE_DENOM = 30.0   # normalize nodule_size by dividing by this
 
-CLINICAL_MODES = ("all_biomarkers", "image_only", "nodule_size_only")
+CLINICAL_MODES = ("all_biomarkers", "image_only", "nodule_size_only",
+                  "image_plus_optional_size")
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +68,25 @@ class DLSFinetuneDataset(Dataset):
           biomarker[2] = nodule_size / NODULE_SIZE_DENOM (0 if NaN/missing)
           biomarker[3:12] = 0
           Trains bothPred (joint head). Used for the image+size deployment model.
+
+      'image_plus_optional_size' (the deployment model):
+          Mirrors the real application, where each scan is EITHER image-only OR
+          image + a measured max nodule size. Routing is per-sample:
+            - size present -> [0]=1, [1]=1, [2]=size/DENOM  -> 'both' path (bothPred)
+            - size absent  -> [0]=1, [1]=0                  -> imgOnly path (imgPred)
+          A genuinely-missing size is NEVER encoded as size=0; it routes through
+          the image-only head, which structurally ignores the clinical vector,
+          so there is no 0-mm placeholder ambiguity.
+          With size_dropout_p > 0 and apply_dropout=True (training only), a random
+          fraction of size-present samples are demoted to image-only each epoch
+          (modality dropout). This manufactures genuine image-only training signal
+          so the shared trunk + image-only head stay deployment-grade even when the
+          training cohort almost always has a size. One model serves both modes;
+          at inference the head is chosen deterministically by size availability.
     """
     def __init__(self, csv_path, label_col="lung_cancer",
-                 clinical_mode="all_biomarkers"):
+                 clinical_mode="all_biomarkers",
+                 size_dropout_p=0.0, apply_dropout=False):
         assert clinical_mode in CLINICAL_MODES, f"clinical_mode must be one of {CLINICAL_MODES}"
         df = pd.read_csv(csv_path, low_memory=False)
         for c in BIOMARKERS:
@@ -78,8 +95,11 @@ class DLSFinetuneDataset(Dataset):
             else:
                 df[c] = 0.0
         if "nodule_size" in df.columns:
-            df["nodule_size"] = pd.to_numeric(df["nodule_size"], errors="coerce").fillna(0.0)
+            raw_size = pd.to_numeric(df["nodule_size"], errors="coerce")
+            df["_has_size"] = (raw_size.notnull() & (raw_size > 0))
+            df["nodule_size"] = raw_size.fillna(0.0)
         else:
+            df["_has_size"] = False
             df["nodule_size"] = 0.0
         df["with_image"]  = df.get("with_image", 1)
         df["with_marker"] = df.get("with_marker", 0)
@@ -89,6 +109,8 @@ class DLSFinetuneDataset(Dataset):
         self.df = df.reset_index(drop=True)
         self.label_col = label_col
         self.clinical_mode = clinical_mode
+        self.size_dropout_p = float(size_dropout_p)
+        self.apply_dropout = bool(apply_dropout)
 
     def __len__(self):
         return len(self.df)
@@ -104,6 +126,16 @@ class DLSFinetuneDataset(Dataset):
             biomarker[0] = 1.0    # with_image
             biomarker[1] = 1.0    # with_marker -> 'both' routing
             biomarker[2] = float(row["nodule_size"]) / NODULE_SIZE_DENOM
+        elif self.clinical_mode == "image_plus_optional_size":
+            biomarker[0] = 1.0    # with_image
+            has_size = bool(row["_has_size"])
+            if self.apply_dropout and has_size and np.random.rand() < self.size_dropout_p:
+                has_size = False  # modality dropout: demote to image-only this epoch
+            if has_size:
+                biomarker[1] = 1.0    # with_marker -> 'both' routing
+                biomarker[2] = float(row["nodule_size"]) / NODULE_SIZE_DENOM
+            else:
+                biomarker[1] = 0.0    # -> imgOnly routing (clinical vector ignored)
         else:  # all_biomarkers (original convention)
             biomarker[0]    = float(row["with_image"])
             biomarker[1]    = float(row["with_marker"])
@@ -194,6 +226,45 @@ def forward_and_loss(model, feats, biomarkers, labels, pos_weight, device,
     return avg_loss, preds, lbls
 
 
+def evaluate(model, loader, pos_weight, device, aux_weight, route_override=None):
+    """Run one no-grad pass and return (loss, auc, lbls, preds).
+
+    route_override:
+      None         -> route each sample as its with_image/with_marker flags say.
+      "image_only" -> force every sample through the image-only head (zero the
+                      with_marker flag). Used to measure the image-only
+                      deployment mode of an image_plus_optional_size model.
+    """
+    model.eval()
+    loss_sum, n_seen = 0.0, 0
+    preds_all, lbls_all = [], []
+    with torch.no_grad():
+        for feats, biomarkers, labels in loader:
+            feats      = feats.to(device, non_blocking=True)
+            biomarkers = biomarkers.to(device, non_blocking=True).clone()
+            labels     = labels.to(device, non_blocking=True)
+            if route_override == "image_only":
+                biomarkers[:, 1] = 0.0
+            loss, preds, lbls = forward_and_loss(model, feats, biomarkers, labels,
+                                                 pos_weight, device, aux_weight)
+            if loss is None:
+                continue
+            n = preds.shape[0]
+            loss_sum += loss.item() * n
+            n_seen   += n
+            preds_all.append(preds.cpu().numpy())
+            lbls_all.append(lbls.cpu().numpy())
+    if n_seen == 0:
+        return float("nan"), float("nan"), np.zeros(0), np.zeros(0)
+    lbls = np.concatenate(lbls_all)
+    preds = np.concatenate(preds_all)
+    try:
+        auc = roc_auc_score(lbls, preds)
+    except ValueError:
+        auc = float("nan")
+    return loss_sum / n_seen, auc, lbls, preds
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -216,6 +287,10 @@ def main():
                    help="Weight on imgPred/clicPred auxiliary losses for both-modality samples.")
     p.add_argument("--clinical_mode", choices=list(CLINICAL_MODES), default="all_biomarkers",
                    help="How to build the per-sample clinical input (see DLSFinetuneDataset docstring).")
+    p.add_argument("--size_dropout_p", type=float, default=0.3,
+                   help="image_plus_optional_size only: probability of demoting a "
+                        "size-present TRAIN sample to image-only each epoch (modality "
+                        "dropout). Ignored by other modes and never applied to valid.")
     p.add_argument("--seed",          type=int, default=42)
     args = p.parse_args()
 
@@ -230,9 +305,15 @@ def main():
 
     # --- data ---
     print(f"Clinical mode: {args.clinical_mode}")
-    train_ds = DLSFinetuneDataset(args.train_csv, args.label_col, args.clinical_mode)
-    valid_ds = DLSFinetuneDataset(args.valid_csv, args.label_col, args.clinical_mode)
+    train_ds = DLSFinetuneDataset(args.train_csv, args.label_col, args.clinical_mode,
+                                  size_dropout_p=args.size_dropout_p, apply_dropout=True)
+    valid_ds = DLSFinetuneDataset(args.valid_csv, args.label_col, args.clinical_mode,
+                                  size_dropout_p=0.0, apply_dropout=False)
     print(f"Train: {len(train_ds)} samples  |  Valid: {len(valid_ds)} samples")
+    if args.clinical_mode == "image_plus_optional_size":
+        n_size = int(train_ds.df["_has_size"].sum())
+        print(f"  train size-present: {n_size}/{len(train_ds)}  "
+              f"(size_dropout_p={args.size_dropout_p})")
 
     pos = int((train_ds.df[args.label_col] == 1).sum())
     neg = len(train_ds) - pos
@@ -310,57 +391,53 @@ def main():
             train_auc = float("nan")
 
         # ----- validation -----
-        model.eval()
-        loss_sum, n_seen = 0.0, 0
-        v_preds_all, v_lbls_all = [], []
-        with torch.no_grad():
-            for feats, biomarkers, labels in valid_loader:
-                feats      = feats.to(device, non_blocking=True)
-                biomarkers = biomarkers.to(device, non_blocking=True)
-                labels     = labels.to(device, non_blocking=True)
-                loss, preds, lbls = forward_and_loss(model, feats, biomarkers, labels,
-                                                     pos_weight_t, device, args.aux_weight)
-                if loss is None:
-                    continue
-                n = preds.shape[0]
-                loss_sum += loss.item() * n
-                n_seen   += n
-                v_preds_all.append(preds.cpu().numpy())
-                v_lbls_all.append(lbls.cpu().numpy())
-        val_loss = loss_sum / max(n_seen, 1)
-        val_lbls  = np.concatenate(v_lbls_all)
-        val_preds = np.concatenate(v_preds_all)
-        try:
-            val_auc = roc_auc_score(val_lbls, val_preds)
-        except ValueError:
-            val_auc = float("nan")
+        # "natural" routing reflects the deployment mix (size-present -> joint head,
+        # size-absent -> image-only head). For image_plus_optional_size we also
+        # measure the forced image-only mode, and select the checkpoint on the mean
+        # of the two so the single model stays strong in BOTH deployment cases.
+        val_loss, val_auc, val_lbls, val_preds = evaluate(
+            model, valid_loader, pos_weight_t, device, args.aux_weight, route_override=None)
+        if args.clinical_mode == "image_plus_optional_size":
+            _, val_auc_img, _, _ = evaluate(
+                model, valid_loader, pos_weight_t, device, args.aux_weight,
+                route_override="image_only")
+            sel_metric = float(np.nanmean([val_auc, val_auc_img]))
+        else:
+            val_auc_img = float("nan")
+            sel_metric = val_auc
 
         scheduler.step()
         elapsed = time.time() - t0
 
+        img_str = f" val_auc_img={val_auc_img:.4f}" if not np.isnan(val_auc_img) else ""
         print(f"Ep {epoch+1:3d}/{args.epochs}  "
               f"train_loss={train_loss:.4f} train_auc={train_auc:.4f}  "
-              f"val_loss={val_loss:.4f} val_auc={val_auc:.4f}  "
+              f"val_loss={val_loss:.4f} val_auc={val_auc:.4f}{img_str}  "
               f"({elapsed:.1f}s)")
 
         log_rows.append(dict(epoch=epoch+1, train_loss=train_loss, train_auc=train_auc,
-                             val_loss=val_loss, val_auc=val_auc,
+                             val_loss=val_loss, val_auc=val_auc, val_auc_img=val_auc_img,
+                             sel_metric=sel_metric,
                              lr=optimizer.param_groups[0]["lr"], time_s=elapsed))
         if writer:
             writer.add_scalar("train/loss", train_loss, epoch)
             writer.add_scalar("train/auc",  train_auc,  epoch)
             writer.add_scalar("val/loss",   val_loss,   epoch)
             writer.add_scalar("val/auc",    val_auc,    epoch)
+            if not np.isnan(val_auc_img):
+                writer.add_scalar("val/auc_image_only", val_auc_img, epoch)
+                writer.add_scalar("val/sel_metric", sel_metric, epoch)
             writer.add_scalar("lr", optimizer.param_groups[0]["lr"], epoch)
 
-        # ----- checkpoint best -----
-        if val_auc > best_val_auc:
-            best_val_auc = val_auc
+        # ----- checkpoint best (on sel_metric) -----
+        if sel_metric > best_val_auc:
+            best_val_auc = sel_metric
             best_epoch   = epoch + 1
             no_improve   = 0
             torch.save(
                 {"state_dict": model.state_dict(),
-                 "epoch": epoch + 1, "val_auc": val_auc, "args": vars(args)},
+                 "epoch": epoch + 1, "val_auc": val_auc, "val_auc_img": val_auc_img,
+                 "sel_metric": sel_metric, "args": vars(args)},
                 os.path.join(args.output_dir, "best.pth"),
             )
             pd.DataFrame({"label": val_lbls, "prob": val_preds}).to_csv(
@@ -368,14 +445,14 @@ def main():
         else:
             no_improve += 1
         if no_improve >= args.patience:
-            print(f"Early stop: no val_auc improvement for {args.patience} epochs.")
+            print(f"Early stop: no val improvement for {args.patience} epochs.")
             break
 
     # ----- finalize -----
     pd.DataFrame(log_rows).to_csv(os.path.join(args.output_dir, "train_log.csv"), index=False)
     if writer: writer.close()
     print()
-    print(f"DONE. Best val AUC: {best_val_auc:.4f} at epoch {best_epoch}")
+    print(f"DONE. Best selection metric: {best_val_auc:.4f} at epoch {best_epoch}")
     print(f"  checkpoint: {os.path.join(args.output_dir, 'best.pth')}")
     print(f"  val preds:  {os.path.join(args.output_dir, 'val_pred_best.csv')}")
     print(f"  train log:  {os.path.join(args.output_dir, 'train_log.csv')}")

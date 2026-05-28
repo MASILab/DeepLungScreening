@@ -44,6 +44,13 @@ def main():
                    help="Empty string disables metric computation.")
     p.add_argument("--clinical_mode", choices=list(CLINICAL_MODES), default="all_biomarkers",
                    help="Must match the clinical_mode used at training time.")
+    p.add_argument("--force_route", choices=["natural", "image_only", "both"], default="natural",
+                   help="Override per-sample routing. 'natural' (default) routes by "
+                        "the with_image/with_marker flags the Dataset assigns. "
+                        "'image_only' scores every sample through the image-only head; "
+                        "'both' forces the joint (image+size) head. Use these to measure "
+                        "an image_plus_optional_size model in each deployment mode on the "
+                        "same input CSV.")
     p.add_argument("--batch_size",  type=int, default=256)
     p.add_argument("--num_workers", type=int, default=4)
     args = p.parse_args()
@@ -96,7 +103,12 @@ def main():
         for feats, biomarkers, _labels in loader:
             B = feats.shape[0]
             feats      = feats.to(device, non_blocking=True)
-            biomarkers = biomarkers.to(device, non_blocking=True)
+            biomarkers = biomarkers.to(device, non_blocking=True).clone()
+
+            if args.force_route == "image_only":
+                biomarkers[:, 1] = 0.0   # with_marker=0 -> image-only head
+            elif args.force_route == "both":
+                biomarkers[:, 1] = 1.0   # with_marker=1 -> joint (image+size) head
 
             both_m, img_m, fac_m = split_batch_by_modality(feats, biomarkers)
             batch_probs = torch.zeros(B, device=device)
