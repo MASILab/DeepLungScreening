@@ -51,6 +51,14 @@ def main():
                         "'both' forces the joint (image+size) head. Use these to measure "
                         "an image_plus_optional_size model in each deployment mode on the "
                         "same input CSV.")
+    p.add_argument("--size_min", type=float, default=None,
+                   help="Eval-time filter: only score rows whose nodule_size >= size_min "
+                        "(uses the ground-truth size in the CSV to select the clinically "
+                        "relevant population; rows with missing size are dropped). "
+                        "The model is NOT given the size in image_only routing — this only "
+                        "selects WHICH subjects are scored, e.g. --size_min 4 --size_max 30.")
+    p.add_argument("--size_max", type=float, default=None,
+                   help="Eval-time filter: only score rows whose nodule_size <= size_max.")
     p.add_argument("--batch_size",  type=int, default=256)
     p.add_argument("--num_workers", type=int, default=4)
     args = p.parse_args()
@@ -65,6 +73,22 @@ def main():
     n_raw  = len(raw_df)
     raw_df = raw_df[raw_df.get("feat_ready", True).astype(bool)].reset_index(drop=True)
     print(f"Rows after dropping feat_ready=False: {len(raw_df)} / {n_raw}")
+
+    # Optional eval-time restriction to a nodule-size band (e.g. 4-30 mm), using the
+    # ground-truth size in the CSV. This selects the clinically relevant population to
+    # report on; it does NOT feed the size to the model (routing is unchanged).
+    if args.size_min is not None or args.size_max is not None:
+        if "nodule_size" not in raw_df.columns:
+            sys.exit("ERROR: --size_min/--size_max given but the input CSV has no "
+                     "'nodule_size' column to filter on.")
+        s = pd.to_numeric(raw_df["nodule_size"], errors="coerce")
+        lo = args.size_min if args.size_min is not None else -np.inf
+        hi = args.size_max if args.size_max is not None else np.inf
+        keep = s.between(lo, hi)
+        n_missing = int(s.isna().sum())
+        print(f"Size filter [{lo}, {hi}]: keeping {int(keep.sum())}/{len(raw_df)} "
+              f"(dropped {int((~keep).sum())}, of which {n_missing} had missing size).")
+        raw_df = raw_df[keep].reset_index(drop=True)
 
     tmp_csv = args.input_csv + ".filtered.csv"
     raw_df.to_csv(tmp_csv, index=False)
