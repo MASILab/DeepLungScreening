@@ -2,9 +2,13 @@
 Match held-out test subjects against existing Stage A feature outputs.
 
 The held-out spreadsheet (selected_subjects_exclude_*.xlsx) lists subjects by
-their UNHARMONIZED fpath. Stage A features were computed on the HARMONIZED
-images, so we derive each row's expected Stage A id from cohort-specific
-filename conventions and check whether feat128/{id}.npy exists on disk.
+their UNHARMONIZED fpath. Stage A features were computed on (possibly
+harmonized) images, and the resulting feat128 filename varies by cohort:
+some cohorts keep the bare unharmonized stem (`<basename>.npy`), NLST appends
+`_resampled[_masked]_fov_extended_orig_res`, others append
+`_harmonized_fov_extended_orig_res`. Rather than guess the per-cohort suffix
+(which silently misses files when the convention differs), we GLOB the cohort's
+feat128/ directory for `<basename>*.npy` and take the actual file on disk.
 
 Same DLS-ready output schema as build_finetune_matched.py — Stage B's
 step4_predict.py reads either CSV interchangeably.
@@ -13,7 +17,7 @@ Run on the lab server:
     python3 cohorts/finetune_harmonized/build_holdout_matched.py
 """
 
-import os, sys, re
+import os, sys, re, glob
 import pandas as pd
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,20 +33,6 @@ OUT_CSV = os.path.join(SCRIPT_DIR, "biodesix_holdout_matched.csv")
 
 # Spreadsheet cohort name -> Stage A output folder.
 COHORT_FOLDER_OVERRIDES = {"tho1496": "1496"}
-
-# Harmonized id = unharmonized_basename + this suffix (per cohort).
-# An empty string means "no extra suffix; id == unharmonized stem".
-HARMONIZED_SUFFIX = {
-    "nlst":     "_resampled_fov_extended_orig_res",
-    "mcl":      "_harmonized_fov_extended_orig_res",
-    "bronch":   "_harmonized_fov_extended_orig_res",
-    "nodulevu": "_harmonized_fov_extended_orig_res",
-    "tho1496":  "_harmonized_fov_extended_orig_res",
-    "vlsp":     "_harmonized_fov_extended_orig_res",
-    "Reliant1": "_harmonized_fov_extended_orig_res",
-    "Reliant2": "_harmonized_fov_extended_orig_res",
-    "Veritas":  "_harmonized_fov_extended_orig_res",
-}
 
 BIOMARKER_RENAME = {
     "personal_cancer_history": "phist",
@@ -63,20 +53,56 @@ def strip_nii(fname):
     return fname
 
 
-def derive_id(row):
-    """unharmonized fpath -> expected Stage A id."""
-    if pd.isna(row["fpath"]):
-        return None
-    base = strip_nii(os.path.basename(str(row["fpath"])))
-    suffix = HARMONIZED_SUFFIX.get(row["cohort_name"], "_harmonized_fov_extended_orig_res")
-    return base + suffix
-
-
 def to_folder(cohort_name):
     if pd.isna(cohort_name):
         return None
     s = str(cohort_name)
     return COHORT_FOLDER_OVERRIDES.get(s, s.lower())
+
+
+def _pick_feat(matches):
+    """Given candidate feat128 .npy paths for one subject, pick one.
+
+    Prefer the non-masked variant when both masked and non-masked exist
+    (NLST produces `_resampled_fov_extended_orig_res` AND
+    `_resampled_masked_fov_extended_orig_res`; the non-masked one matches
+    what Stage B was trained on). Otherwise take the shortest name (closest
+    to the bare stem), deterministically.
+    """
+    if not matches:
+        return None
+    non_masked = [m for m in matches if "_masked" not in os.path.basename(m)]
+    pool = non_masked if non_masked else matches
+    # Shortest basename first, then lexicographic — deterministic.
+    pool = sorted(pool, key=lambda m: (len(os.path.basename(m)), m))
+    return pool[0]
+
+
+def resolve_feat(row):
+    """unharmonized fpath -> (id, feat128_path, feat_ready) by globbing disk.
+
+    Looks in <FEAT_ROOT>/<cohort_folder>/feat128/ for the subject's stem.
+    Tries an exact `<stem>.npy` first, then `<stem>*.npy` (which catches the
+    various harmonization/resample suffixes), then `<stem>_*.npy`.
+    """
+    if pd.isna(row["fpath"]) or pd.isna(row["cohort_name"]):
+        return pd.Series({"id": None, "feat128_path": None, "feat_ready": False})
+    folder = to_folder(row["cohort_name"])
+    stem = strip_nii(os.path.basename(str(row["fpath"])))
+    feat_dir = os.path.join(FEAT_ROOT, folder, "feat128")
+
+    exact = os.path.join(feat_dir, f"{stem}.npy")
+    if os.path.isfile(exact):
+        chosen = exact
+    else:
+        matches = glob.glob(os.path.join(feat_dir, f"{stem}*.npy"))
+        chosen = _pick_feat(matches)
+
+    if chosen is None:
+        # Report the bare stem so unmatched diagnostics are readable.
+        return pd.Series({"id": stem, "feat128_path": exact, "feat_ready": False})
+    fid = os.path.splitext(os.path.basename(chosen))[0]
+    return pd.Series({"id": fid, "feat128_path": chosen, "feat_ready": True})
 
 
 def main():
@@ -90,19 +116,9 @@ def main():
     df = pd.read_excel(SPREADSHEET)
     print(f"  rows: {len(df)}")
 
-    df["id"]            = df.apply(derive_id, axis=1)
     df["cohort_folder"] = df["cohort_name"].apply(to_folder)
-    df["feat128_path"]  = df.apply(
-        lambda r: (
-            os.path.join(FEAT_ROOT, r["cohort_folder"], "feat128", f"{r['id']}.npy")
-            if pd.notna(r["id"]) and pd.notna(r["cohort_folder"])
-            else None
-        ),
-        axis=1,
-    )
-    df["feat_ready"] = df["feat128_path"].apply(
-        lambda p: os.path.isfile(p) if isinstance(p, str) else False
-    )
+    resolved = df.apply(resolve_feat, axis=1)
+    df[["id", "feat128_path", "feat_ready"]] = resolved[["id", "feat128_path", "feat_ready"]]
 
     df_renamed = df.rename(columns=BIOMARKER_RENAME)
     df_renamed["with_image"]  = df_renamed["feat_ready"].astype(int)
