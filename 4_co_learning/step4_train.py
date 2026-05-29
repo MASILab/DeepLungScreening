@@ -281,7 +281,9 @@ def main():
     p.add_argument("--weight_decay",  type=float, default=1e-4)
     p.add_argument("--epochs",        type=int, default=50)
     p.add_argument("--patience",      type=int, default=10,
-                   help="Early stop if val AUC doesn't improve for this many epochs.")
+                   help="Early stop if the val selection metric doesn't improve for this "
+                        "many epochs. Set <=0 to DISABLE early stopping: train all "
+                        "--epochs and keep the best checkpoint (best.pth) seen along the way.")
     p.add_argument("--num_workers",   type=int, default=4)
     p.add_argument("--aux_weight",    type=float, default=0.5,
                    help="Weight on imgPred/clicPred auxiliary losses for both-modality samples.")
@@ -444,7 +446,7 @@ def main():
                 os.path.join(args.output_dir, "val_pred_best.csv"), index=False)
         else:
             no_improve += 1
-        if no_improve >= args.patience:
+        if args.patience > 0 and no_improve >= args.patience:
             print(f"Early stop: no val improvement for {args.patience} epochs.")
             break
 
