@@ -165,6 +165,7 @@ def main():
         "session_date":raw_df["session_date"].values if "session_date" in raw_df else "",
         "id":          raw_df["id"].values         if "id" in raw_df else "",
         "feat128_path":raw_df["feat128_path"].values,
+        "nodule_size": raw_df["nodule_size"].values if "nodule_size" in raw_df else np.nan,
         "label":       raw_df[label_col].values if label_col in raw_df.columns else np.nan,
         "prob":        all_probs,
         "with_image":  raw_df["with_image"].values if "with_image" in raw_df else 1,
