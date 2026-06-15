@@ -1,0 +1,132 @@
+Bootstrap: docker
+From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
+
+# Singularity/Apptainer definition for DeepLungScreening INFERENCE on
+# A6000 / Ampere GPUs. Runs the published 4-step pipeline (preprocess ->
+# nodule detection -> feature extraction -> co-learning) loading pretrained
+# weights, which are baked into the image from the repo.
+#
+# Why these versions (NOT the repo's Dockerfile or requirements.txt):
+#   * The original Dockerfile is CPU-only (pytorch 1.4) -> won't use the GPU.
+#   * requirements.txt pins torch 1.11, but the code calls
+#     torch.load(..., weights_only=False) -- a kwarg that only exists in
+#     torch >= 1.13. So 1.11 cannot run the current code.
+#   * torch 1.13.1+cu117 is the minimal bump that (a) has weights_only,
+#     (b) supports Ampere/A6000 (sm_86), and (c) stays close to the 1.x
+#     lineage the torch-1.4-era model code was written against.
+# Everything else is pinned to requirements.txt values.
+#
+# Build (see build_singularity.sh for the NFS-safe path):
+#   apptainer build deeplung.sif deeplung.def
+#   # rootless: singularity build --fakeroot deeplung.sif deeplung.def
+#
+# Run with host GPUs (--nv binds the host NVIDIA driver). The code hardcodes
+# cuda:0, so pick the physical GPU with CUDA_VISIBLE_DEVICES:
+#   CUDA_VISIBLE_DEVICES=0 apptainer exec --nv \
+#       -B /path/to/inputs:/INPUTS -B /path/to/outputs:/OUTPUTS \
+#       deeplung.sif bash run_all.sh
+
+%files
+    # Copy the whole repo (incl. .git and the committed *.ckpt / *.pth weights)
+    . /app
+
+%post
+    set -eux
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        python3.8 python3.8-dev python3-pip \
+        git ca-certificates
+    rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1
+
+    python -m pip install --no-cache-dir --upgrade "pip<24" setuptools wheel
+
+    # PyTorch for CUDA 11.7 (Ampere-capable, has weights_only). The wheels
+    # bundle their own CUDA runtime; the host only needs a compatible driver.
+    python -m pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cu117 \
+        torch==1.13.1+cu117 torchvision==0.14.1+cu117
+
+    # Scientific stack, pinned to requirements.txt (all have cp38 wheels).
+    python -m pip install --no-cache-dir \
+        numpy==1.22.2 \
+        pandas==1.4.0 \
+        scipy==1.7.1 \
+        scikit-image==0.19.1 \
+        scikit-learn==0.24.2 \
+        nibabel==3.1.1 \
+        joblib==1.0.1 \
+        tqdm==4.62.3 \
+        pynvml \
+        pyyaml \
+        openpyxl
+
+    # Mirror the original Dockerfile's runtime layout so run_all.sh works
+    # unchanged (it hardcodes /INPUTS and /OUTPUTS).
+    mkdir -p /INPUTS /OUTPUTS
+    chmod 777 /INPUTS /OUTPUTS
+
+    # Build-time sanity check: imports + the baked-in weights must be present.
+    python - <<'PY'
+import torch, numpy, pandas, nibabel, scipy, skimage, sklearn
+print("torch", torch.__version__, "| CUDA build", torch.version.cuda)
+print("numpy", numpy.__version__)
+import os
+for w in ("/app/2_nodule_detection/detector.ckpt",
+          "/app/3_feature_extraction/classifier_state_dictpy3.ckpt",
+          "/app/4_co_learning/pretrain.pth"):
+    assert os.path.exists(w), f"MISSING baked-in weights: {w}"
+    print("ok", w, os.path.getsize(w), "bytes")
+print("deeplung deps + weights OK")
+PY
+
+%environment
+    export PYTHONNOUSERSITE=1
+    export PIP_USER=false
+    export PYTHONUNBUFFERED=1
+
+%runscript
+    cd /app
+    exec "$@"
+
+%test
+    set -e
+    python -c "import torch; print('CUDA build:', torch.version.cuda)"
+    test -f /app/2_nodule_detection/detector.ckpt
+    test -f /app/3_feature_extraction/classifier_state_dictpy3.ckpt
+    test -f /app/4_co_learning/pretrain.pth
+    echo "weights present"
+
+%labels
+    Name DeepLungScreening-Inference
+    Description DeepLungScreening 4-step inference pipeline (torch 1.13.1+cu117, Ampere)
+
+%help
+    DeepLungScreening inference container (A6000 / Ampere, CUDA 11.7).
+
+    The published pretrained weights are baked in at:
+        /app/2_nodule_detection/detector.ckpt
+        /app/3_feature_extraction/classifier_state_dictpy3.ckpt
+        /app/4_co_learning/pretrain.pth   (overridable: step4 --model_pth)
+
+    Run the whole pipeline (expects /INPUTS/NIfTI + /INPUTS/test.csv):
+        CUDA_VISIBLE_DEVICES=0 apptainer exec --nv \
+            -B /host/inputs:/INPUTS -B /host/outputs:/OUTPUTS \
+            deeplung.sif bash run_all.sh
+
+    Run an individual step (paths are yours to choose with -B binds):
+        apptainer exec --nv deeplung.sif \
+            python3 ./4_co_learning/step4_main.py \
+                --sess_csv ... --feat_root ... --save_csv_path ... \
+                --model_pth /path/to/your_finetuned.pth
+
+    To swap in your OWN fine-tuned weights for steps 2/3 (which load by fixed
+    path), bind over the baked-in file:
+        -B /path/my_detector.ckpt:/app/2_nodule_detection/detector.ckpt
+
+    The code hardcodes cuda:0 -- select the physical GPU via
+    CUDA_VISIBLE_DEVICES, always pass --nv.
