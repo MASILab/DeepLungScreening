@@ -35,7 +35,7 @@ class DataBowl3Classifier(Dataset):
         self.pbb_label = []
         self.subj_name = []
         idcs = split
-        self.filenames = [os.path.join(datadir, '%s_clean.npy' % idx.split('-')[0]) for idx in idcs]
+        self.filenames = [os.path.join(datadir, '%s_clean.npy' % idx) for idx in idcs]
         if self.phase!='test':
             self.yset = 1-np.array([f.split('-')[1][2] for f in idcs]).astype('int')
  
