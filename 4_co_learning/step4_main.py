@@ -1,6 +1,6 @@
-import numpy as np 
-import torch 
-import torch.nn as nn 
+import numpy as np
+import torch
+import torch.nn as nn
 import pandas as pd
 from model import *
 import argparse
@@ -21,14 +21,14 @@ need_factor = ['with_image', 'with_marker',  'age',  'education',  'bmi',  'phis
 sess_mark_dict = {}
 
 df = pd.read_csv(args.sess_csv)
-sess_splits = df['id'].tolist()
+sess_splits = df['pid'].tolist()
 testsplit = sess_splits
 
 for i, item in df.iterrows():
     test_biomarker = np.zeros(12).astype('float32')
     for j in range(len(need_factor)):
         test_biomarker[j] = item[need_factor[j]]
-    sess_mark_dict[item['id']] = test_biomarker
+    sess_mark_dict[item['pid']] = test_biomarker
 
 data_path = args.feat_root
 
@@ -46,7 +46,7 @@ pred_list = []
 for i in range(len(testsplit)):
     sess_id = testsplit[i]
     test_biomarker = sess_mark_dict[sess_id]
-    
+
     test_imgfeat = np.load(data_path + '/' + sess_id + '.npy')
     test_biomarker = torch.from_numpy(test_biomarker).unsqueeze(0)
     test_imgfeat = torch.from_numpy(test_imgfeat).unsqueeze(0)

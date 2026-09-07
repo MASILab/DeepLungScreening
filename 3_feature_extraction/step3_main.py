@@ -39,7 +39,7 @@ config2['bboxpath'] = args.bbox_root
 config2['datadir'] = args.prep_root
 config2['feat128_root'] = args.feat_root
 
-sess_splits = pd.read_csv(args.sess_csv)['id'].tolist()
+sess_splits = pd.read_csv(args.sess_csv)['pid'].tolist()
 testsplit = sess_splits
 
 def test_casenet(model,testset):
@@ -52,10 +52,10 @@ def test_casenet(model,testset):
     #model = model.cuda()
     model.eval()
     predlist = []
-    
+
     #     weight = torch.from_numpy(np.ones_like(y).float().cuda()
     for i,(x,coord, subj_name) in enumerate(data_loader):
-        print (i, subj_name[0])   
+        print (i, subj_name[0])
         coord = Variable(coord) #.cuda()
         x = Variable(x) #.cuda()
         nodulePred,casePred, feat128, feat64 = model(x,coord)
@@ -74,7 +74,7 @@ def test_casenet(model,testset):
 
         #print([i,data_loader.dataset.split[i,1],casePred.data.cpu().numpy()])
     predlist = np.concatenate(predlist)
-    return predlist    
+    return predlist
 
 
 

@@ -10,6 +10,7 @@ import warnings
 import nibabel as nib
 import argparse
 import pandas as pd
+from tqdm import tqdm
 
 def process_mask(mask):
     convex_mask = np.copy(mask)
@@ -22,8 +23,8 @@ def process_mask(mask):
         else:
             mask2 = mask1
         convex_mask[i_layer] = mask2
-    struct = generate_binary_structure(3,1)  
-    dilatedMask = binary_dilation(convex_mask,structure=struct,iterations=10) 
+    struct = generate_binary_structure(3,1)
+    dilatedMask = binary_dilation(convex_mask,structure=struct,iterations=10)
     return dilatedMask
 
 
@@ -56,14 +57,14 @@ def resample(imgs, spacing, new_spacing,order = 2):
     else:
         raise ValueError('wrong shape')
 
-def savenpy(name,prep_folder,data_path,use_existing=True):  
+def savenpy(name,prep_folder,data_path,use_existing=True):
     '''
     name: the file name (#name#.nii.gz)
     prep_folder: the folder to store preprocess result
     data_path: file path
     '''
     resolution = np.array([1,1,1])
-    
+
     if use_existing:
         if  os.path.exists(os.path.join(prep_folder,name+'_clean.npy')):
             print(name+' had been done')
@@ -71,7 +72,7 @@ def savenpy(name,prep_folder,data_path,use_existing=True):
     try:
         im, m1, m2, spacing = step1_python(data_path)
         Mask = m1+m2
-        
+
         newshape = np.round(np.array(Mask.shape)*spacing/resolution)
         xx,yy,zz= np.where(Mask)
         box = np.array([[np.min(xx),np.max(xx)],[np.min(yy),np.max(yy)],[np.min(zz),np.max(zz)]])
@@ -118,24 +119,50 @@ def savenpy(name,prep_folder,data_path,use_existing=True):
     print(name+' done')
 
 if __name__ == '__main__':
-    
+
     '''
-    
+
     '''
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--sess_csv', type=str, default='./test.csv',
-                        help='sessions want to be tested')
+                         help='sessions want to be tested')
     parser.add_argument('--prep_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
                         help='the root for save preprocessed data')
-    parser.add_argument('--ori_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
-                        help='the root of original data')
+    # parser.add_argument('--ori_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
+                        #  help='the root of original data') Data path is present in the csv
     args = parser.parse_args()
-    
-    sess_splits = pd.read_csv(args.sess_csv)['id'].tolist()
-    
-    for i in range(len(sess_splits)):
-        sess_id = sess_splits[i]
-        savenpy(name = sess_id, prep_folder = args.prep_root,
-            data_path = args.ori_root + '/' + sess_id + '.nii.gz')
-        np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+
+
+
+
+    # sess_splits = pd.read_csv(args.sess_csv, dtype={'pid':str})
+    # sess_splits = sess_splits[~sess_splits['pid'].isnull()]['pid'].tolist()
+
+    #Trial on MCL image which says adenocarcinoma with nodule size = 0mm
+
+    df = pd.read_csv(args.sess_csv)
+
+    for idx, row in tqdm(df.iterrows()):
+        sess_id = str(row["session_id"]) #For MCL 
+        # sess_id = str(row["subject_id"]) #For NLST
+ 
+
+        if sess_id == "376873159time20130101":
+            print("Preprocessing data:")
+            file_path = row["fpath"]
+            savenpy(
+                name = sess_id,
+                prep_folder = "/home-local/krishar1/DeepLungScreening/mcl_adenocarcinoma_no_nodule_size",
+                data_path = file_path
+            )
+            np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+        
+        else:
+           continue
+
+    # for i in range(len(sess_splits)):
+    #     sess_id = sess_splits[i]
+    #     savenpy(name = sess_id, prep_folder = args.prep_root,
+    #         data_path = args.ori_root + '/' + sess_id + '.nii.gz')
+    #     np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
