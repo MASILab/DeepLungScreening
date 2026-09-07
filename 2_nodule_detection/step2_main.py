@@ -30,28 +30,29 @@ parser.add_argument('--bbox_root', type=str, default='/nfs/masi/gaor2/tmp/justte
                     help='the root for save preprocessed data')
 parser.add_argument('--prep_root', type=str, default='/nfs/masi/gaor2/tmp/justtest/prep',
                     help='the root for save preprocessed data')
+parser.add_argument('--gpu', type=int, default=0,
+                    help='the GPU id to use')
 
 args = parser.parse_args()
 config['datadir'] = args.prep_root
 
-#sess_splits = pd.read_csv(args.sess_csv)['pid'].tolist()
-# sess_splits = pd.read_csv(args.sess_csv, dtype={'pid':str})
-# sess_splits = sess_splits[~sess_splits['pid'].isnull()]['pid'].tolist()
+# sess_splits = pd.read_csv(args.sess_csv)['pid'].tolist()
+sess_splits = pd.read_csv(args.sess_csv, dtype={'pid':str})
+sess_splits = sess_splits[~sess_splits['pid'].isnull()]['pid'].tolist()
 
 #Trial image for MCL adenocarcinoma with nodule size = 0 mm
-df = pd.read_csv(args.sess_csv)
-sess_splits = ["376873159time20130101"]
+# df = pd.read_csv(args.sess_csv)
+# sess_splits = ["376873159time20130101"]
 
 config['testsplit'] = sess_splits
 
 nodmodel = import_module('net_detector')
 config1, nod_net, loss, get_pbb = nodmodel.get_model()
-checkpoint = torch.load('//home-local/krishar1/DeepLungScreening/2_nodule_detection/detector.ckpt')
+checkpoint = torch.load('/home-local/krishar1/DeepLungScreening/2_nodule_detection/detector.ckpt')
 nod_net.load_state_dict(checkpoint['state_dict'])
 
-nod_net = nod_net
-
-nod_net = nod_net
+device = torch.device(f"cuda:{args.gpu}")
+nod_net = nod_net.to(device)
 
 bbox_result_path = args.bbox_root
 if not os.path.exists(bbox_result_path):
