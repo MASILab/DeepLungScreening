@@ -169,7 +169,7 @@ if __name__ == '__main__':
     os.makedirs(log_dir, exist_ok=True)
 
     sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
-    sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
+    sess_splits = sorted(sess_splits[~sess_splits['id'].isnull()]['id'].tolist())
 
     logging.basicConfig(
     filename=os.path.join(log_dir, 'preprocess.log'),

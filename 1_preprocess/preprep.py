@@ -274,5 +274,3 @@ def step1_python(case_path):
     bw = fill_hole(bwcp)
     bw1, bw2, bw = two_lung_only(bw, spacing)
     return case_pixels, bw1, bw2, spacing
-    
-
