@@ -18,6 +18,7 @@ from importlib import import_module
 import pandas as pd
 import pdb
 import argparse
+from tqdm import tqdm
 
 
 from detect_config import config
@@ -36,13 +37,17 @@ parser.add_argument('--gpu', type=int, default=0,
 args = parser.parse_args()
 config['datadir'] = args.prep_root
 
-# sess_splits = pd.read_csv(args.sess_csv)['pid'].tolist()
+
 sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
 sess_splits = sorted(sess_splits[~sess_splits['id'].isnull()]['id'].tolist())
 
-#Trial image for MCL adenocarcinoma with nodule size = 0 mm
-# df = pd.read_csv(args.sess_csv)
-# sess_splits = ["376873159time20130101"]
+print("Length of sess_splits before filtering:", len(sess_splits))
+
+#Filter sess_splits if file in --prep_root doesnt end with '_clean.nii.gz'
+sess_splits = [s for s in sess_splits if os.path.exists(os.path.join(args.prep_root, s)) and s.endswith('_clean.nii.gz')]
+
+print("Length of sess_splits after filtering images with missing preprocessing labels:", len(sess_splits))
+
 
 config['testsplit'] = sess_splits
 
@@ -51,7 +56,7 @@ config1, nod_net, loss, get_pbb = nodmodel.get_model()
 checkpoint = torch.load('/home-local/krishar1/DeepLungScreening/2_nodule_detection/detector.ckpt', weights_only=False)
 nod_net.load_state_dict(checkpoint['state_dict'])
 
-device = torch.device(f"cuda:{args.gpu}")
+device = torch.device("cuda:1")
 nod_net = nod_net.to(device)
 
 bbox_result_path = args.bbox_root
