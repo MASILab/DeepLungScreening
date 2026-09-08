@@ -410,6 +410,6 @@ def collate(batch):
         return batch
     elif isinstance(batch[0], int):
         return torch.LongTensor(batch)
-    elif isinstance(batch[0], collections.Iterable):
+    elif isinstance(batch[0], collections.abc.Iterable):
         transposed = zip(*batch)
         return [collate(samples) for samples in transposed]
