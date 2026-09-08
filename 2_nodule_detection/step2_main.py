@@ -18,7 +18,6 @@ from importlib import import_module
 import pandas as pd
 import pdb
 import argparse
-from tqdm import tqdm
 
 
 from detect_config import config
@@ -44,7 +43,10 @@ sess_splits = sorted(sess_splits[~sess_splits['id'].isnull()]['id'].tolist())
 print("Length of sess_splits before filtering:", len(sess_splits))
 
 #Filter sess_splits if file in --prep_root doesnt end with '_clean.nii.gz'
-sess_splits = [s for s in sess_splits if os.path.exists(os.path.join(args.prep_root, s)) and s.endswith('_clean.nii.gz')]
+sess_splits = [
+    s for s in sess_splits
+    if os.path.exists(os.path.join(args.prep_root, s + '_clean.nii.gz'))
+]
 
 print("Length of sess_splits after filtering images with missing preprocessing labels:", len(sess_splits))
 
