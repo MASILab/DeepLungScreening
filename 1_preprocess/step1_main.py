@@ -12,6 +12,8 @@ import argparse
 import pandas as pd
 from tqdm import tqdm
 from joblib import Parallel, delayed
+import logging
+
 
 def process_mask(mask):
     convex_mask = np.copy(mask)
@@ -112,18 +114,32 @@ def savenpy(name,prep_folder,data_path,use_existing=True):
         #activate the following line to keep conformity with old data
         ni_img = nib.Nifti1Image(sliceim, matr)
         nib.save(ni_img, os.path.join(prep_folder,name+'_clean.nii.gz'))
+        return ('Success', '')
 
     except Exception as e:
         print('bug in '+name)
         print(e)
+        logging.exception(f"{name} failed")   # writes full traceback to the log
+        return ('failed', str(e))
         #raise
     # print(name+' done')
 
+# def save_npy_label(sess_id, args):
+#     if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
+#         savenpy(name = sess_id, prep_folder = args.prep_root, 
+#                 data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
+#         np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+
+
 def save_npy_label(sess_id, args):
-    if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
-        savenpy(name = sess_id, prep_folder = args.prep_root, 
-                data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
-        np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+    if os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
+        return {'id': sess_id, 'status': 'skipped', 'error': ''}
+    status, error = savenpy(name=sess_id, prep_folder=args.prep_root,
+                            data_path=os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
+    np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+    logging.info(f"{sess_id}\tstatus={status}")
+    return {'id': sess_id, 'status': status, 'error': error}
+
     
 def overwrite_npy_label(sess_id, args):
     savenpy(name = sess_id, prep_folder = args.prep_root, 
@@ -132,7 +148,6 @@ def overwrite_npy_label(sess_id, args):
 
 
 if __name__ == '__main__':
-    
     '''
     
     '''
@@ -144,64 +159,40 @@ if __name__ == '__main__':
                         help='the root for save preprocessed data')
     parser.add_argument('--ori_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
                         help='the root of original data')
+    parser.add_argument('--log_dir', type=str, default=None,
+                    help='directory to save preprocess.log (defaults to prep_root)')
     parser.add_argument('--n_jobs', type=int, default=1)
     args = parser.parse_args()
 
+    #Logging to see which ones succeeded, failed, or were skipped
+    log_dir = args.log_dir if args.log_dir is not None else args.prep_root
+    os.makedirs(log_dir, exist_ok=True)
+
     sess_splits = pd.read_csv(args.sess_csv, dtype={'id':str})
     sess_splits = sess_splits[~sess_splits['id'].isnull()]['id'].tolist()
-    # sess_splits = ['100529time2001']
 
-    Parallel(n_jobs=args.n_jobs, prefer="threads")(
+    logging.basicConfig(
+    filename=os.path.join(log_dir, 'preprocess.log'),
+    level=logging.INFO,
+    format='%(asctime)s %(message)s', force=True,
+)
+
+    results = Parallel(n_jobs=args.n_jobs, prefer="threads")(
         delayed(save_npy_label)(sess_id, args) for sess_id in tqdm(sess_splits, total=len(sess_splits))
     )
 
-    # use this to overwrite the existing npy and label files
-    # overwrite_npy_label('39336276282time20130204', args)
-    
-    # for i in tqdm(range(len(sess_splits))):
-    #     sess_id = sess_splits[i]
-    #     if not os.path.exists(os.path.join(args.ori_root, f"{sess_id}_clean.nii.gz")):
-    #         savenpy(name = sess_id, prep_folder = args.prep_root, 
-    #             data_path = os.path.join(args.ori_root, f"{sess_id}.nii.gz"))
-    #         np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(os.path.join(log_dir, 'step1_preprocess_status.csv'), index=False)
+
+    counts = results_df['status'].value_counts()
+    n_success, n_failed, n_skipped = (int(counts.get(k, 0)) for k in ('success', 'failed', 'skipped'))
+
+    print(f"\nTotal: {len(results_df)} | success: {n_success} | "
+        f"failed: {n_failed} | skipped: {n_skipped}")
+    if n_failed:
+        print("\nFailed:")
+        print(results_df.loc[results_df['status'] == 'failed', ['id', 'error']].to_string(index=False))
 
 
-# if __name__ == '__main__':
-
-#     '''
-
-#     '''
-    # parser = argparse.ArgumentParser()
-
-    # parser.add_argument('--sess_csv', type=str, default='./test.csv',
-    #                      help='sessions want to be tested')
-    # parser.add_argument('--prep_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
-    #                     help='the root for save preprocessed data')
-    # # parser.add_argument('--ori_root', type=str, default='/nfs/masi/gaor2/tmp/justtest',
-    #                     #  help='the root of original data') Data path is present in the csv
-    # args = parser.parse_args()
-
-
-    # #Trial on MCL image which says adenocarcinoma with nodule size = 0mm
-
-    # df = pd.read_csv(args.sess_csv)
-
-    # for idx, row in tqdm(df.iterrows()):
-    #     sess_id = str(row["session_id"]) #For MCL 
-    #     # sess_id = str(row["subject_id"]) #For NLST
- 
-
-    #     if sess_id == "376873159time20130101":
-    #         print("Preprocessing data:")
-    #         file_path = row["fpath"]
-    #         savenpy(
-    #             name = sess_id,
-    #             prep_folder = "/home-local/krishar1/DeepLungScreening/mcl_adenocarcinoma_no_nodule_size",
-    #             data_path = file_path
-    #         )
-    #         np.save(args.prep_root + '/' + sess_id + '_label.npy', np.zeros((1, 4)))
-        
-    #     else:
-    #        continue
 
 
