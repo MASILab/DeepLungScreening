@@ -17,7 +17,7 @@ mkdir -p ${PRED_DIR}
 
 echo "Starting step 4 DLS prediction..."
 
-python /home-local/krishar1/DeepLungScreening/4_dls_prediction/step4_main.py \
+python /home-local/krishar1/DeepLungScreening/4_co_learning/step4_main.py \
      --sess_csv /home-local/krishar1/DeepLungScreening/NLST_T0_paired_cancer_for_DLS_step4_pred_9_8_26.csv\
     --feat_root ${FEAT128} \
     --save_csv_path ${PRED_CSV} 
