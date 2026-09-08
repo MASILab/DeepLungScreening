@@ -64,4 +64,4 @@ dataset = DataBowl3Detector(config['testsplit'],config1,phase='test',split_combe
 test_loader = DataLoader(dataset, batch_size = 1,
     shuffle = False, num_workers = 1, pin_memory=False, collate_fn =collate)
 
-test_detect(test_loader, nod_net, get_pbb, bbox_result_path, config1)
+test_detect(test_loader, nod_net, get_pbb, bbox_result_path, config1, device)
