@@ -12,7 +12,7 @@ def load_scan(path):
 
 def get_pixels_hu(slices): #slices is a nib object
     #####
-    image=slices.get_data()
+    image=np.asanyarray(slices.dataobj)
     image=np.swapaxes(image,0,2)
     image=np.swapaxes(image,1,2)
     image=np.rot90(image,axes=(1,2))
