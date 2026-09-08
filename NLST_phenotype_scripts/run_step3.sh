@@ -26,4 +26,3 @@ python /home-local/krishar1/DeepLungScreening/3_feature_extraction/step3_main.py
     --prep_root ${PREP_ROOT} \
     --bbox_root ${BBOX_ROOT} \
     --feat64 ${FEAT64} \
-    --feat128 ${FEAT128} \
