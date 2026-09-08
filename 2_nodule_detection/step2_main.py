@@ -38,7 +38,7 @@ config['datadir'] = args.prep_root
 
 # sess_splits = pd.read_csv(args.sess_csv)['pid'].tolist()
 sess_splits = pd.read_csv(args.sess_csv, dtype={'pid':str})
-sess_splits = sess_splits[~sess_splits['pid'].isnull()]['pid'].tolist()
+sess_splits = sorted(sess_splits[~sess_splits['pid'].isnull()]['pid'].tolist())
 
 #Trial image for MCL adenocarcinoma with nodule size = 0 mm
 # df = pd.read_csv(args.sess_csv)
