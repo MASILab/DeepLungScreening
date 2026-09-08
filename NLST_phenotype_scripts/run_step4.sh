@@ -6,7 +6,7 @@ BBOX_ROOT=${ROOT}/bbox
 FEAT64=${ROOT}/feat64
 FEAT128=${ROOT}/feat128
 PRED_DIR=${ROOT}/predictions
-PRED_CSV=${ROOT}/dls_predictions_paired_cancer.csv
+PRED_CSV=${PRED_DIR}/dls_predictions_paired_cancer.csv
 
 mkdir -p ${ORI_ROOT}
 mkdir -p ${PREP_ROOT}
@@ -21,3 +21,5 @@ python /home-local/krishar1/DeepLungScreening/4_co_learning/step4_main.py \
      --sess_csv /home-local/krishar1/DeepLungScreening/NLST_T0_paired_cancer_for_DLS_step4_pred_9_8_26.csv\
     --feat_root ${FEAT128} \
     --save_csv_path ${PRED_CSV} 
+
+echo "Step 4 DLS prediction completed. Predictions saved to ${PRED_CSV}"
