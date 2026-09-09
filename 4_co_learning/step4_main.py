@@ -65,22 +65,27 @@ model_pth = args.model_pth
 state_dict = torch.load(model_pth, map_location=lambda storage, location: storage, weights_only=False)
 model.load_state_dict(state_dict)
 
+model.eval()
+
 pred_list = []
 
-for i in range(len(testsplit)):
-    sess_id = testsplit[i]
-    test_biomarker = sess_mark_dict[sess_id]
-    
-    test_imgfeat = np.load(data_path + '/' + sess_id + '.npy')
-    test_biomarker = torch.from_numpy(test_biomarker).unsqueeze(0)
-    test_imgfeat = torch.from_numpy(test_imgfeat).unsqueeze(0)
-    imgPred, clicPred, bothImgPred, bothClicPred, bothPred = model(test_imgfeat, test_biomarker, test_imgfeat, test_biomarker)
-    pred_list += list(bothPred.data.numpy())
+with torch.no_grad():
+    for i in range(len(testsplit)):
+        sess_id = testsplit[i]
+        test_biomarker = sess_mark_dict[sess_id]
+        
+        test_imgfeat = np.load(data_path + '/' + sess_id + '.npy')
+        test_biomarker = torch.from_numpy(test_biomarker).unsqueeze(0)
+        test_imgfeat = torch.from_numpy(test_imgfeat).unsqueeze(0)
+        imgPred, clicPred, bothImgPred, bothClicPred, bothPred = model(test_imgfeat, test_biomarker, test_imgfeat, test_biomarker)
+        pred_list += list(bothPred.data.numpy())
 
 data = pd.DataFrame()
 data['id'] = testsplit
 data['pred'] = pred_list
 
 data.to_csv(args.save_csv_path, index = False)
+
+print(f"Saved DLS inference results to {args.save_csv_path}")
 
 print (pred_list)
