@@ -29,8 +29,7 @@ args = parser.parse_args()
 need_factor = ['with_image', 'with_marker',  
 'age',  'education',  'bmi',
 'phist', 'fhist', 
-'smo_status', 'quit_time', 'pkyr']
-
+'smo_status', 'quit_time', 'pkyr'] 
 sess_mark_dict = {}
 
 df = pd.read_csv(args.sess_csv, dtype={'id': str})
@@ -78,7 +77,7 @@ with torch.no_grad():
         test_biomarker = torch.from_numpy(test_biomarker).unsqueeze(0)
         test_imgfeat = torch.from_numpy(test_imgfeat).unsqueeze(0)
         imgPred, clicPred, bothImgPred, bothClicPred, bothPred = model(test_imgfeat, test_biomarker, test_imgfeat, test_biomarker)
-        pred_list += list(bothPred.data.numpy())
+        pred_list += list(bothPred.data.numpy()) #Both clinical and image features
 
 data = pd.DataFrame()
 data['id'] = testsplit

@@ -4,6 +4,7 @@ import torch.nn as nn
 import pandas as pd
 from model import *
 import argparse
+import os   # CHANGED
 
 parser = argparse.ArgumentParser()
 
@@ -38,21 +39,48 @@ empty_factor = torch.zeros((0, 12))
 empty_both_img = torch.zeros((0, 5, 128))
 
 pred_list = []
+status_list = []   # CHANGED: record why a scan has no prediction
 
 with torch.no_grad():   # CHANGED
     for i in range(len(testsplit)):
         sess_id = testsplit[i]
+        feat_file = data_path + '/' + sess_id + '.npy'
 
-        test_imgfeat = np.load(data_path + '/' + sess_id + '.npy').astype('float32')
-        assert test_imgfeat.shape[-1] == 128, f'{sess_id}: got {test_imgfeat.shape}, need 128-dim features'  # CHANGED
+        # CHANGED: scans that failed in step 1/2/3 have no (or a bad) feature file -> skip, don't crash
+        if not os.path.isfile(feat_file):
+            pred_list.append(np.nan)
+            status_list.append('no_feature_file')
+            continue
+        try:
+            test_imgfeat = np.load(feat_file).astype('float32')
+        except Exception:
+            pred_list.append(np.nan)
+            status_list.append('unreadable_feature_file')
+            continue
+        if test_imgfeat.ndim != 2 or test_imgfeat.shape[1] != 128:
+            pred_list.append(np.nan)
+            status_list.append(f'bad_feature_shape_{test_imgfeat.shape}')
+            continue
+        if not np.isfinite(test_imgfeat).all():
+            pred_list.append(np.nan)
+            status_list.append('nan_in_features')
+            continue
+
         test_imgfeat = torch.from_numpy(test_imgfeat).unsqueeze(0)
         imgPred, clicPred, bothImgPred, bothClicPred, bothPred = model(test_imgfeat, empty_factor, empty_both_img, empty_factor)
-        pred_list += list(imgPred.data.numpy())   # CHANGED: was bothPred (Return only image pred)
+        pred_list.append(float(imgPred.data.numpy()[0]))   # CHANGED: was bothPred
+        status_list.append('ok')
 
 data = pd.DataFrame()
 data['id'] = testsplit
 data['pred_image_only'] = pred_list   # CHANGED: was 'pred'
+data['status'] = status_list          # CHANGED
 
 data.to_csv(args.save_csv_path, index = False)
 
-print (pred_list)
+# CHANGED: summary instead of printing every prediction
+print(data['status'].value_counts().to_string())
+failed = data[data['status'] != 'ok']
+if len(failed) > 0:
+    print(f'{len(failed)} scans without a prediction (see status column), e.g.:')
+    print(failed.head(10).to_string(index=False))
